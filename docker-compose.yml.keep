@@ -1,0 +1,32 @@
+services:
+  roma-backend:
+    build: ./external/ROMA/docker/backend
+    env_file: ./.env
+    volumes:
+      - ./sentient.yaml:/app/sentient.yaml:ro
+      - ./roma_config:/app/roma_config:ro
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
+  roma-frontend:
+    build: ./external/ROMA/frontend
+    env_file: ./.env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - roma-backend
+    restart: unless-stopped
+
+  health-tracker:
+    build: .
+    env_file: ./.env
+    command: uvicorn sentient_roma_api:app --host 0.0.0.0 --port 8000
+    volumes:
+      - ./data:/app/data
+      - ./roma_config:/app/roma_config:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      - roma-backend
+    restart: unless-stopped

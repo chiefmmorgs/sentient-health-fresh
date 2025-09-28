@@ -1,0 +1,51 @@
+# Deep Research Agent Profile
+# Specialized configuration for comprehensive research tasks
+
+profile:
+  name: "DeepResearchAgent"
+  description: "Comprehensive research agent with specialized root planner and task-specific execution"
+
+  # Root-specific planner for initial decomposition
+  root_planner_adapter_name: "DeepResearchPlanner"
+  
+  # Root-specific aggregator for final synthesis
+  root_aggregator_adapter_name: "RootResearchAggregator"
+
+  # Task-specific planners for sub-tasks
+  planner_adapter_names:
+    SEARCH: "EnhancedSearchPlanner"    # Enhanced search planner with date awareness and detailed planning
+    WRITE: "EnhancedWritePlanner"       # Could use different planner if needed
+    THINK: "EnhancedThinkPlanner"       # Could use different planner if needed
+
+  # Task-specific executors
+  executor_adapter_names:
+    SEARCH: "OpenAICustomSearcher"     # Using OpenAI Custom Searcher as default
+    THINK: "BasicReasoningExecutor"         # Analysis and synthesis
+    WRITE: "BasicReportWriter"         # Report generation
+
+  # Task-specific aggregators
+  aggregator_adapter_names:
+    SEARCH: "SearchAggregator"         # Specialized for combining search results
+    THINK: "ThinkAggregator"           # Focused on analytical synthesis  
+    WRITE: "WriteAggregator"           # Optimized for document composition
+
+  # Other action agents
+  atomizer_adapter_name: "default_atomizer"
+  aggregator_adapter_name: "default_aggregator"  # Fallback for backward compatibility
+  plan_modifier_adapter_name: "PlanModifier"
+
+  # Fallbacks
+  default_planner_adapter_name: "CoreResearchPlanner"
+  default_executor_adapter_name: "BasicReasoningExecutor"
+  default_node_agent_name_prefix: "DeepResearch"
+
+# Profile metadata
+metadata:
+  version: "1.0.0"
+  description: "Deep research agent profile using existing components with enhanced search planning"
+  use_case: "Comprehensive research tasks requiring multi-step analysis"
+  recommended_for:
+    - "Academic research"
+    - "Market analysis" 
+    - "Technical investigation"
+    - "Fact-checking and verification"

@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+.pdm-python
+.pdm-build/
+
+# Frontend
+node_modules/
+dist/
+.next/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+
+# Project
+logs/
+*.log
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# Notebooks
+notebooks/
+*.ipynb_checkpoints/
+
+# Development
+scratch/
+tmp/
+test_*.py

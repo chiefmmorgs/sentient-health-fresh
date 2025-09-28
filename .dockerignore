@@ -1,0 +1,9 @@
+.git
+.gitmodules
+**/__pycache__/
+**/*.pyc
+.venv
+env
+node_modules
+data/*
+external/ROMA/.git

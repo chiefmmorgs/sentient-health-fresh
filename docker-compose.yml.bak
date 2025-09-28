@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  roma:
+    build:
+      context: .
+      dockerfile: Dockerfile.roma
+    ports:
+      - "5000:5000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    networks: [app-network]
+    restart: unless-stopped
+
+  health-tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile  # see Dockerfile below
+    ports:
+      - "8000:8000"
+    environment:
+      - ROMA_URL=http://roma:5000
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    depends_on:
+      - roma
+    networks: [app-network]
+    restart: unless-stopped
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+
+networks:
+  app-network:
+    driver: bridge
+

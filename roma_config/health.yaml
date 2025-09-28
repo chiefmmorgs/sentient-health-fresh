@@ -1,0 +1,31 @@
+# ROMA Skill: Health Weekly Report
+skill: health_weekly_report
+
+atomizer:
+  rule: |
+    if "data" in task and isinstance(task["data"], dict) and task["data"].get("week"):
+        return "plan"
+    return "execute:health.ingest"
+
+planner:
+  plan:
+    - execute: health.ingest
+    - execute: health.metrics
+    - execute: health.coach
+    - aggregate: health.aggregate
+
+executors:
+  - ref: health.ingest
+  - ref: health.metrics
+  - ref: health.coach
+
+aggregator:
+  - ref: health.aggregate
+
+registry:
+  executors:
+    health.ingest: "roma_agents.health_executors:DataIngestionExecutor"
+    health.metrics: "roma_agents.health_executors:MetricsAnalysisExecutor"
+    health.coach: "roma_agents.health_executors:CoachingExecutor"
+  aggregators:
+    health.aggregate: "roma_agents.health_executors:WeeklyReportAggregator"

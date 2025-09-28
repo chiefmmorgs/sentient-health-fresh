@@ -1,0 +1,21 @@
+{
+  "report": {
+    "week": {
+      "steps": 72000,
+      "sleep_hours": 49.0,
+      "workouts": 4,
+      "water_liters": 14.0
+    },
+    "scores": {
+      "steps": 100,
+      "sleep": 87,
+      "workouts": 100,
+      "hydration": 100,
+      "overall": 96
+    },
+    "coaching": [
+      "Great week! Keep your current routine and consider a recovery day."
+    ],
+    "summary": "Overall score 96/100."
+  }
+}

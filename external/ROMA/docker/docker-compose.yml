@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: sentient-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SENTIENT_CONFIG_PATH=/app/sentient.yaml
+      - FLASK_ENV=${FLASK_ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    env_file:
+      - ../.env
+    volumes:
+      - ../sentient.yaml:/app/sentient.yaml:ro
+      - ../src:/app/src:ro
+      - ../project_results:/app/project_results
+      - ../emergency_backups:/app/emergency_backups
+      - ../logs:/app/logs
+      # S3 mount volume - only mount if S3_MOUNT_ENABLED=true and path is validated
+      # Fallback to local_data if S3 mounting is disabled
+      - ../local_data:/app/local_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    container_name: sentient-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:5000
+      - DOCKER_ENV=true
+    volumes:
+      - ../frontend/src:/app/src:ro
+      - ../frontend/public:/app/public:ro
+      - ../frontend/index.html:/app/index.html:ro
+      - ../frontend/vite.config.ts:/app/vite.config.ts:ro
+      - ../frontend/tsconfig.json:/app/tsconfig.json:ro
+      - ../frontend/tailwind.config.js:/app/tailwind.config.js:ro
+      - ../frontend/postcss.config.js:/app/postcss.config.js:ro
+    depends_on:
+      - backend

@@ -1,0 +1,71 @@
+# Crypto Analytics Agent Profile
+# Specialized configuration for cryptocurrency and DeFi analytics tasks
+
+profile:
+  name: "crypto_analytics_agent"
+  description: "Comprehensive crypto analytics agent for token analysis, DeFi research, and market intelligence"
+
+  # Root-specific planner for initial decomposition
+  root_planner_adapter_name: "CryptoAnalyticsPlanner"
+  
+  # Root-specific aggregator for final synthesis
+  root_aggregator_adapter_name: "CryptoRootAggregator"
+
+  # Task-specific planners for sub-tasks
+  planner_adapter_names:
+    SEARCH: "CryptoSearchPlanner"        # Optimized for crypto data retrieval
+    WRITE: "CryptoAnalyticsPlanner"      # Handles report writing and synthesis
+    THINK: "CryptoAnalyticsPlanner"      # Manages analysis and strategy tasks
+
+  # Task-specific executors
+  executor_adapter_names:
+    SEARCH: "OpenAICustomSearcher"       # Using OpenAI for reliable crypto data search
+    THINK: "CryptoMarketAnalyzer"        # Specialized crypto market analysis
+    WRITE: "CryptoResearchExecutor"      # Comprehensive crypto research reports
+
+  # Task-specific aggregators
+  aggregator_adapter_names:
+    SEARCH: "CryptoAnalyticsAggregator"  # Combines crypto search results
+    THINK: "CryptoAnalyticsAggregator"   # Synthesizes market analysis
+    WRITE: "CryptoAnalyticsAggregator"   # Aggregates research outputs
+
+  # Other action agents
+  atomizer_adapter_name: "default_atomizer"
+  aggregator_adapter_name: "CryptoAnalyticsAggregator"  # Fallback aggregator
+  plan_modifier_adapter_name: "PlanModifier"
+
+  # Fallbacks
+  default_planner_adapter_name: "CryptoAnalyticsPlanner"
+  default_executor_adapter_name: "CryptoMarketAnalyzer"
+  default_node_agent_name_prefix: "CryptoAnalytics"
+
+# Profile metadata
+metadata:
+  version: "1.0.0"
+  description: "Crypto analytics agent profile for comprehensive blockchain and DeFi analysis"
+  use_case: "Cryptocurrency and DeFi research requiring real-time data and multi-perspective analysis"
+  recommended_for:
+    - "Token deep dives and investment analysis"
+    - "DeFi protocol evaluation and yield strategies"
+    - "Market trend analysis and technical indicators"
+    - "On-chain analytics and whale tracking"
+    - "Risk assessment and security evaluation"
+    - "Comparative analysis of crypto projects"
+  
+  capabilities:
+    - "Real-time price and market data analysis"
+    - "On-chain metrics and blockchain analytics"
+    - "DeFi TVL and yield opportunity assessment"
+    - "Technical analysis with multiple indicators"
+    - "Security audit and risk evaluation"
+    - "Tokenomics and protocol economics analysis"
+    - "Market sentiment and social metrics tracking"
+    - "Cross-chain data aggregation"
+  
+  data_sources:
+    - "CoinGecko/CoinMarketCap (prices, market data)"
+    - "Etherscan/Blockchain explorers (on-chain data)"
+    - "DefiLlama (DeFi metrics)"
+    - "Dune Analytics (custom queries)"
+    - "CertiK/audit platforms (security)"
+    - "Social platforms (sentiment analysis)"

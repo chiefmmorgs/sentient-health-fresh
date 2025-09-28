@@ -1,0 +1,46 @@
+# Data Analysis Agent Profile
+# Specialized for data analysis and visualization tasks
+
+profile:
+  name: "DataAnalysisAgent"
+  description: "Specialized agent for data analysis, statistical research, and insight generation"
+
+  root_planner_adapter_name: "GeneralTaskSolver"
+  
+  # Root-specific aggregator for final synthesis
+  root_aggregator_adapter_name: "RootGeneralAggregator"
+
+  planner_adapter_names:
+    SEARCH: "EnhancedSearchPlanner"
+    WRITE: "EnhancedWritePlanner"
+    THINK: "EnhancedThinkPlanner"
+
+  executor_adapter_names:
+    SEARCH: "OpenAICustomSearcher"
+    THINK: "BasicReasoningExecutor"
+    WRITE: "BasicReportWriter"
+
+  # Task-specific aggregators
+  aggregator_adapter_names:
+    SEARCH: "SearchAggregator"         # Specialized for combining search results
+    THINK: "ThinkAggregator"           # Focused on analytical synthesis  
+    WRITE: "WriteAggregator"           # Optimized for document composition
+
+  atomizer_adapter_name: "default_atomizer"
+  aggregator_adapter_name: "default_aggregator"  # Fallback for backward compatibility
+  plan_modifier_adapter_name: "PlanModifier"
+
+  default_planner_adapter_name: "GeneralTaskSolver"
+  default_executor_adapter_name: "BasicReasoningExecutor"
+  default_node_agent_name_prefix: "DataAnalysis"
+
+metadata:
+  version: "1.0.0"
+  description: "Specialized for quantitative analysis and data-driven insights"
+  use_case: "Data analysis, statistical research, and business intelligence"
+  recommended_for:
+    - "Statistical analysis"
+    - "Data visualization"
+    - "Business intelligence"
+    - "Market research"
+    - "Performance analysis"

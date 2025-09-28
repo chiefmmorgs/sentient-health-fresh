@@ -1,0 +1,708 @@
+from fastapi import FastAPI, HTTPException
+# --- BEGIN roma logging monkeypatch ---
+# Make ROMA logging idempotent + tolerant to duplicate level definitions.
+try:
+    from loguru import logger as _loguru_logger
+    import sentientresearchagent.core.logging_config as _roma_logging
+
+    # Save original once
+    _ORIG_SETUP = getattr(_roma_logging, "setup_logging", None)
+    if _ORIG_SETUP and not getattr(_roma_logging, "_PATCHED_SETUP_LOGGING", False):
+        def _safe_define_level(logger, name, **kwargs):
+            # Only define level if it doesn't exist; swallow duplicates
+            try:
+                logger.level(name)
+                return
+            except Exception:
+                pass
+            try:
+                logger.level(name, **kwargs)
+            except Exception:
+                # Duplicate or incompatible re-def -> ignore
+                pass
+
+        def _wrapped_setup_logging(*args, **kwargs):
+            # Idempotent guard
+            if getattr(_roma_logging, "_SENTIENT_LOGGING_SETUP_DONE", False):
+                return
+            # Temporarily monkeypatch logger.level calls inside setup to be safe
+            _orig_level = _loguru_logger.level
+            def _level_wrapper(name, *a, **k):
+                # Try native; if it's a duplicate-define attempt, degrade to query
+                try:
+                    return _orig_level(name, *a, **k)
+                except Exception as e:
+                    s = str(e)
+                    if "already exists" in s and ("no=" in repr(k) or "no=" in str(k) or a):
+                        try:
+                            return _orig_level(name)  # query existing level
+                        except Exception:
+                            return
+                    raise
+            try:
+                _loguru_logger.level = _level_wrapper
+                # Run original setup (it may call logger.level to define PLAN, etc.)
+                _ORIG_SETUP(*args, **kwargs)
+                # Mark as done so future calls are no-op
+                setattr(_roma_logging, "_SENTIENT_LOGGING_SETUP_DONE", True)
+            finally:
+                # Always restore native method
+                _loguru_logger.level = _orig_level
+
+        # Patch the module function
+        _roma_logging.setup_logging = _wrapped_setup_logging
+        _roma_logging._PATCHED_SETUP_LOGGING = True
+except Exception:
+    # Never let the API die if the monkeypatch fails
+    pass
+# --- END roma logging monkeypatch ---
+
+from typing import Dict, Any
+from roma_bridge.roma_config import RomaBridge
+from storage.db import HealthDatabase
+
+app = FastAPI(title="Sentient Health Tracker - ROMA Hybrid")
+# --- BEGIN injected single-agent bootstrap ---
+# Ensure we only ever create one LightweightSentientAgent and bind it to app.state
+try:
+    from loguru import logger
+    import os
+    from sentientresearchagent.core import logging_config as _roma_lc
+    _orig_setup_logging = getattr(_roma_lc, "setup_logging", None)
+
+    def _safe_setup_logging(cfg, console_filter=None):
+        """
+        Wrap ROMA setup_logging to avoid Loguru duplicate-level crash
+        when endpoints (or imports) initialize ROMA more than once.
+        """
+        try:
+            # If custom levels exist, don't redefine them.
+            logger.level("PLAN")
+            logger.level("AGGREGATE")
+            logger.level("HITL")
+            # If we reach here without exception, levels already exist → skip.
+            return
+        except Exception:
+            # Levels not present yet → allow original setup
+            pass
+        if _orig_setup_logging:
+            return _orig_setup_logging(cfg, console_filter)
+
+    # Monkeypatch only once
+    if getattr(_roma_lc, "_SAFE_PATCHED", False) is False:
+        _roma_lc.setup_logging = _safe_setup_logging
+        _roma_lc._SAFE_PATCHED = True
+except Exception as _e:
+    # Non-fatal. Worst case, first init defines levels; subsequent inits may error if repeated,
+    # but our goal is to create exactly one agent below.
+    pass
+
+# Create + bind a single LightweightSentientAgent if missing
+try:
+    from sentientresearchagent.framework_entry import LightweightSentientAgent as _LSA
+    import os
+    eff = (os.getenv("SENTIENT_PROFILE") or "general_agent").strip()
+    eff = "general_agent" if eff == "default" else eff
+
+    # Only create if we don't already have one on app.state
+    if not hasattr(app.state, "sentient_agent") or getattr(app.state, "sentient_agent", None) is None:
+        _ROMA_ACTIVE_LSA = _LSA.create_with_profile(profile_name=eff)
+        try:
+            app.state.sentient_agent = _ROMA_ACTIVE_LSA
+        except Exception:
+            # If app.state is not ready for some reason, keep a module global as fallback
+            globals()["_ROMA_ACTIVE_LSA"] = _ROMA_ACTIVE_LSA
+except Exception as _e:
+    # Non-fatal; /debug endpoints will still work but may show nulls
+    pass
+# --- END injected single-agent bootstrap ---
+
+roma_bridge = RomaBridge()
+db = HealthDatabase()
+
+@app.get("/roma-info")
+async def get_roma_info():
+    return {
+        "framework": "ROMA (hybrid-local)",
+        "version": "hybrid",
+        "agents": ["data_ingestion", "metrics_analysis", "coaching", "reporting"],
+        "task_flows": ["weekly_health_analysis", "quick_analysis", "coaching_session"]
+    }
+
+@app.post("/analyze")
+async def quick_analysis(data: Dict[str, Any]):
+    try:
+        roma_result = await roma_bridge.execute_health_task(
+            task_type="quick_analysis",
+            data=data or {}
+        )
+        return roma_result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/weekly-report")
+async def create_weekly_report(data: Dict[str, Any]):
+    try:
+        roma_result = await roma_bridge.execute_health_task(
+            task_type="weekly_health_analysis",
+            data=data or {}
+        )
+        report_id = await db.save_report(roma_result)
+        return {"report_id": report_id, "roma_result": roma_result, "status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/chat")
+async def coaching_chat(message: Dict[str, Any]):
+    try:
+        roma_result = await roma_bridge.execute_health_task(
+            task_type="coaching_session",
+            data=message or {}
+        )
+        return roma_result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- add at the bottom of api/sentient_roma_api.py ---
+
+@app.get("/health")
+async def health():
+    try:
+        mode = getattr(roma_bridge, "mode", "unknown")
+    except Exception:
+        mode = "unknown"
+    return {"status": "ok", "bridge_mode": mode}
+
+@app.get("/version")
+async def version():
+    return {
+        "name": "Sentient Health Tracker",
+        "framework": "ROMA (hybrid-local with optional official)",
+        "api": "v1"
+    }
+# --- BEGIN injected profile normalization + debug route ---
+from typing import Optional as _Opt
+import os as _os
+from fastapi import Query as _Query
+
+def _normalize_profile(name: _Opt[str]) -> str:
+    eff = (name or _os.getenv("SENTIENT_PROFILE") or "general_agent")
+    if eff == "default":
+        eff = "general_agent"
+    return eff
+
+async def _get_agent_with_normalization(profile_name: _Opt[str] = None):
+    # Local import keeps import-time side-effects (agent bootstrap) lazy
+    from sentientresearchagent.framework_entry import LightweightSentientAgent as _LSA
+    eff = _normalize_profile(profile_name)
+    return _LSA.create_with_profile(profile_name=eff)
+
+# --- BEGIN injected block ---
+import os
+import traceback
+from typing import Optional
+from fastapi.responses import JSONResponse
+
+# --- BEGIN loguru duplicate-level guard ---
+def _patch_loguru_level_idempotent():
+    try:
+        from loguru._logger import Logger as _Logger
+        _orig = _Logger.level
+        def _safe_level(self, *a, **kw):
+            try:
+                return _orig(self, *a, **kw)
+            except Exception as e:
+                msg = str(e)
+                if "already exists" in msg and a:
+                    # If duplicate, just get the level info instead of failing.
+                    try:
+                        return _orig(self, a[0])
+                    except Exception:
+                        return None
+                raise
+        _Logger.level = _safe_level
+    except Exception:
+        # If loguru is not present or internals changed, carry on.
+        pass
+
+# Apply ASAP at import time
+_patch_loguru_level_idempotent()
+# --- END loguru duplicate-level guard ---
+
+def _safe(v):
+    try:
+        return None if v is None else str(v)
+    except Exception:
+        return None
+
+def _normalize_requested_profile(requested: Optional[str]) -> str:
+    eff = (requested or os.getenv("SENTIENT_PROFILE") or "general_agent").strip()
+    return "general_agent" if eff == "default" else eff
+
+def _get_active_agent_and_sm():
+    agent = None
+    try:
+        agent = (globals().get("SENTIENT_AGENT")
+                 or globals().get("sentient_agent")
+                 or globals().get("lsa")
+                 or globals().get("_ACTIVE_LSA"))
+    except Exception:
+        agent = None
+    if agent is None:
+        try:
+            agent = getattr(app.state, "sentient_agent", None)
+        except Exception:
+            agent = None
+    sm = getattr(agent, "system_manager", None)
+    try:
+        app.state.sentient_agent = agent
+    except Exception:
+        pass if agent else None
+    # Opportunistic bind if app.state has no handle yet
+    if agent is None:
+        try:
+            from sys import modules
+            # Try to import our scan helper (defined above)
+            _scan = globals().get("_bind_existing_agent_if_any")
+            if _scan:
+                _scan()
+                agent = getattr(app.state, "sentient_agent", None)
+        except Exception:
+            pass
+    sm = getattr(agent, "system_manager", None) if agent else None
+    if agent is None:
+        try:
+            _ensure = globals().get("_ensure_agent_available")
+            if _ensure:
+                _ensure()
+                agent = getattr(app.state, "sentient_agent", None)
+        except Exception:
+            pass
+    sm = getattr(agent, "system_manager", None) if agent else None
+    return agent, sm
+
+@app.get("/debug/profile")
+async def debug_profile(profile: Optional[str] = None):
+    # Reports the current live SystemManager state without creating new agents.
+    # Avoids re-running ROMA logging (Loguru level redefinition errors).
+    try:
+        normalized = _normalize_requested_profile(profile)
+        agent, sm = _get_active_agent_and_sm()
+        bp = getattr(sm, "active_blueprint", None)
+        payload = {
+            "requested_profile": _safe(profile),
+            "normalized_requested": _safe(normalized),
+            "effective_profile": _safe(getattr(sm, "active_profile_name", None) if sm else None),
+            "blueprint": _safe(getattr(bp, "name", None) if bp else None),
+            "hitl_enabled": _safe(getattr(sm, "hitl_enabled", None) if sm else None),
+            "note": "Observational endpoint; does not instantiate agents.",
+        }
+        return JSONResponse(content=payload, status_code=200)
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+                "requested_profile": _safe(profile),
+            },
+        )
+# --- END injected block ---
+
+# --- BEGIN startup bind ---
+import sys
+
+def _bind_existing_agent_if_any():
+    """Scan loaded modules for an object with .system_manager and bind it."""
+    try:
+        if getattr(app.state, "sentient_agent", None) is not None:
+            return getattr(app.state, "sentient_agent")
+    except Exception:
+        pass
+
+    for name, val in globals().items():
+        if hasattr(val, "system_manager"):
+            try:
+                app.state.sentient_agent = val
+                return val
+            except Exception:
+                pass
+
+    for mod_name, mod in list(sys.modules.items()):
+        if not mod_name.startswith("sentientresearchagent"):
+            continue
+        d = getattr(mod, "__dict__", {})
+        for k, v in list(d.items()):
+            if hasattr(v, "system_manager"):
+                try:
+                    app.state.sentient_agent = v
+                    return v
+                except Exception:
+                    pass
+    return None
+
+def _safe_create_agent(profile_name: str):
+    """
+    Create ROMA LightweightSentientAgent without crashing on duplicate Loguru levels.
+    Also patch loguru.logger.level itself (belt-and-suspenders), and print any error.
+    """
+    # 1) Patch ROMA logging setup to ignore duplicate level errors
+    try:
+        import sentientresearchagent.core.logging_config as _lc
+        _orig_setup = _lc.setup_logging
+        def _patched_setup(*a, **k):
+            try:
+                return _orig_setup(*a, **k)
+            except Exception as e:
+                msg = str(e)
+                if "already exists" in msg and "Level" in msg:
+                    return None
+                raise
+        _lc.setup_logging = _patched_setup
+    except Exception:
+        pass
+
+    # 2) Patch loguru.logger.level to ignore duplicates globally
+    try:
+        from loguru import logger as _loguru_logger
+        _orig_level_fn = _loguru_logger.level
+        def _patched_level(name, *a, **k):
+            try:
+                return _orig_level_fn(name, *a, **k)
+            except Exception as e:
+                msg = str(e)
+                if isinstance(e, Exception) and "already exists" in msg and "Level" in msg:
+                    # Return the current level object if it already exists
+                    return _orig_level_fn(name)
+                raise
+        # Only patch once per process
+        if getattr(_loguru_logger, "_patched_ignore_duplicate_levels", False) is False:
+            _loguru_logger.level = _patched_level  # type: ignore[attr-defined]
+            _loguru_logger._patched_ignore_duplicate_levels = True  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+    # 3) Attempt to create and bind
+    try:
+        from sentientresearchagent.framework_entry import LightweightSentientAgent as _LSA
+        agent = _LSA.create_with_profile(profile_name=profile_name)
+        try:
+            app.state.sentient_agent = agent
+        except Exception:
+            pass
+        return agent
+    except Exception as _e:
+        # Print so it shows in docker logs (and doesn't look like a silent success)
+        try:
+            print("SAFE_CREATE_AGENT_ERROR:", repr(_e))
+        except Exception:
+            pass
+        return None
+
+def _ensure_agent_available():
+    """
+    Prefer existing handle (no side effects). If absent, create safely.
+    """
+    agent = _bind_existing_agent_if_any()
+    if agent is None:
+        try:
+            norm = _normalize_requested_profile(None)
+        except Exception:
+            norm = "general_agent"
+        agent = _safe_create_agent(norm)
+    return agent
+
+
+@app.on_event("startup")
+async def _create_or_bind_agent_on_startup():
+    _ensure_agent_available()
+# --- END startup bind ---
+
+
+# --- BEGIN force bind endpoint ---
+@app.get("/debug/force-bind")
+async def _debug_force_bind():
+    try:
+        # Create/bind if missing; reuse if present.
+        agent = _ensure_agent_available()
+        sm = getattr(agent, "system_manager", None) if agent else None
+        bp = getattr(sm, "active_blueprint", None)
+        return {
+            "bound": bool(agent),
+            "effective_profile": getattr(sm, "active_profile_name", None) if sm else None,
+            "blueprint": getattr(bp, "name", None) if bp else None,
+        }
+    except Exception as e:
+        return {"bound": False, "error": str(e)}
+# --- END force bind endpoint ---
+
+
+# --- BEGIN init profile endpoint ---
+from typing import Optional
+
+@app.get("/debug/init-profile")
+async def _debug_init_profile(profile: Optional[str] = None):
+    """
+    Initialize the ROMA LightweightSentientAgent with a profile once,
+    then bind it to app.state.sentient_agent.
+    """
+    try:
+        # Normalize requested -> "general_agent" (treat "default" as alias)
+        eff = _normalize_requested_profile(profile)
+
+        # If something is already bound and has a profile, reuse it
+        agent = getattr(app.state, "sentient_agent", None)
+        sm = getattr(agent, "system_manager", None) if agent else None
+        current = getattr(sm, "active_profile_name", None) if sm else None
+        if current:
+            bp = getattr(sm, "active_blueprint", None)
+            return {
+                "initialized": False,
+                "reason": "already-initialized",
+                "effective_profile": current,
+                "blueprint": getattr(bp, "name", None) if bp else None,
+            }
+
+        # Otherwise, create with profile (single call avoids Loguru redefinition issues)
+        try:
+            from sentientresearchagent.framework_entry import LightweightSentientAgent as _LSA
+            agent = _LSA.create_with_profile(profile_name=eff)
+        except Exception as e:
+            return {"initialized": False, "error": str(e), "requested": eff}
+
+        # Bind for future requests
+        try:
+            app.state.sentient_agent = agent
+        except Exception:
+            pass
+
+        sm = getattr(agent, "system_manager", None)
+        bp = getattr(sm, "active_blueprint", None) if sm else None
+        return {
+            "initialized": True,
+            "requested": eff,
+            "effective_profile": getattr(sm, "active_profile_name", None) if sm else None,
+            "blueprint": getattr(bp, "name", None) if bp else None,
+            "hitl_enabled": getattr(sm, "hitl_enabled", None) if sm else None,
+        }
+    except Exception as e:
+        return {"initialized": False, "error": str(e)}
+# --- END init profile endpoint ---
+
+
+
+# --- BEGIN safe warmup endpoint ---
+from fastapi.responses import JSONResponse
+
+_warmup_lock = None
+try:
+    import asyncio
+    _warmup_lock = asyncio.Lock()
+except Exception:
+    pass
+
+def _safe_patch_romalogging():
+    """
+    Make ROMA's logging idempotent so repeated imports/initializations
+    don't crash with 'Level "PLAN" already exists...'.
+    """
+    try:
+        from sentientresearchagent.core import logging_config as _lc
+        _orig = _lc.setup_logging
+
+        def _setup_safe(*a, **k):
+            try:
+                return _orig(*a, **k)
+            except Exception as e:
+                # Only swallow duplicate-level errors. Re-raise others.
+                if "already exists" in str(e):
+                    return None
+                raise
+
+        _lc.setup_logging = _setup_safe
+        return True
+    except Exception:
+        return False
+
+def _create_and_bind_agent_once(profile_name: str = "general_agent"):
+    """
+    Create ROMA agent once and bind it for later observation.
+    Safe to call many times.
+    """
+    global _ACTIVE_LSA
+    try:
+        agent = getattr(app.state, "sentient_agent", None)
+        if agent is not None:
+            return agent
+    except Exception:
+        pass
+
+    # Ensure logging cannot blow up on repeated inits
+    _safe_patch_romalogging()
+
+    try:
+        # Lazily import the factory (so our monkeypatch is in effect)
+        from sentientresearchagent.framework_entry import LightweightSentientAgent
+        agent = LightweightSentientAgent.create_with_profile(profile_name=profile_name)
+    except Exception:
+        # If anything fails, keep the app alive; caller will see nulls.
+        return None
+
+    try:
+        app.state.sentient_agent = agent
+    except Exception:
+        pass
+    return agent
+
+def _finalize_agent_activation(agent, profile_name: str):
+    """
+    Best-effort: try common initialize/activate methods so SystemManager has an
+    active profile + blueprint. Safe if methods are missing.
+    """
+    if not agent:
+        return agent
+
+    # Try obvious agent-level methods first
+    for m in (
+        "initialize_with_profile",
+        "initialize_profile",
+        "initialize",
+        "init_with_profile",
+        "init",
+        "ensure_initialized",
+    ):
+        fn = getattr(agent, m, None)
+        try:
+            if callable(fn):
+                # Prefer signatures that accept a profile name
+                if fn.__code__.co_argcount >= 2:  # (self, profile_name, ...)
+                    fn(profile_name)  # type: ignore[arg-type]
+                else:
+                    fn()  # type: ignore[call-arg]
+                break
+        except Exception:
+            # Non-fatal; try next option
+            pass
+
+    sm = getattr(agent, "system_manager", None)
+
+    # If still no active profile, try some system_manager-level methods
+    if sm and not getattr(sm, "active_profile_name", None):
+        for smm in (
+            "load_profile",
+            "activate_profile",
+            "set_active_profile",
+            "initialize_profile",
+        ):
+            sfn = getattr(sm, smm, None)
+            try:
+                if callable(sfn):
+                    sfn(profile_name)  # type: ignore[arg-type]
+                    break
+            except Exception:
+                pass
+
+    # Some frameworks expose a “finalize”/“post_init” step
+    for maybe in ("finalize", "post_init", "ensure_ready"):
+        fn = getattr(agent, maybe, None)
+        try:
+            if callable(fn):
+                fn()
+        except Exception:
+            pass
+
+    return agent
+
+def _finalize_agent_activation(agent, profile_name: str):
+    """
+    Best-effort: try common initialize/activate methods so SystemManager has an
+    active profile + blueprint. Safe if methods are missing.
+    """
+    if not agent:
+        return agent
+
+    # Try obvious agent-level methods first
+    for m in (
+        "initialize_with_profile",
+        "initialize_profile",
+        "initialize",
+        "init_with_profile",
+        "init",
+        "ensure_initialized",
+    ):
+        fn = getattr(agent, m, None)
+        try:
+            if callable(fn):
+                # Prefer signatures that accept a profile name
+                if fn.__code__.co_argcount >= 2:  # (self, profile_name, ...)
+                    fn(profile_name)  # type: ignore[arg-type]
+                else:
+                    fn()  # type: ignore[call-arg]
+                break
+        except Exception:
+            # Non-fatal; try next option
+            pass
+
+    sm = getattr(agent, "system_manager", None)
+
+    # If still no active profile, try some system_manager-level methods
+    if sm and not getattr(sm, "active_profile_name", None):
+        for smm in (
+            "load_profile",
+            "activate_profile",
+            "set_active_profile",
+            "initialize_profile",
+        ):
+            sfn = getattr(sm, smm, None)
+            try:
+                if callable(sfn):
+                    sfn(profile_name)  # type: ignore[arg-type]
+                    break
+            except Exception:
+                pass
+
+    # Some frameworks expose a “finalize”/“post_init” step
+    for maybe in ("finalize", "post_init", "ensure_ready"):
+        fn = getattr(agent, maybe, None)
+        try:
+            if callable(fn):
+                fn()
+        except Exception:
+            pass
+
+    return agent
+
+@app.get("/debug/warmup")
+async def debug_warmup(profile: str | None = None):
+    """
+    Initialize ROMA once (default 'general_agent'), bind to app.state,
+    and return the current live state. Safe to call repeatedly.
+    """
+    prof = (profile or "general_agent").strip() or "general_agent"
+
+    # Serialize init to avoid two parallel creations
+    if _warmup_lock:
+        async with _warmup_lock:
+            agent = _create_and_bind_agent_once(prof)
+    else:
+        from sentientresearchagent.framework_entry import LightweightSentientAgent as _LSA
+    try:
+        agent = _LSA.create_with_profile(profile_name=prof)
+    except Exception as _e:
+        # Fallback to previous path if ROMA throws for any reason
+        agent = _create_and_bind_agent_once(prof)
+    agent = _finalize_agent_activation(agent, prof)
+    sm = getattr(agent, "system_manager", None) if agent else None
+    bp = getattr(sm, "active_blueprint", None) if sm else None
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "initialized": bool(agent and sm),
+            "effective_profile": getattr(sm, "active_profile_name", None) if sm else None,
+            "blueprint": getattr(bp, "name", None) if bp else None,
+            "requested": prof,
+        },
+    )
+# --- END safe warmup endpoint ---
+

@@ -1,0 +1,46 @@
+# roma_config/health_agents.yaml
+agents:
+  data_ingestion:
+    type: "executor"
+    model_id: "openrouter/deepseek/deepseek-chat-v3.1:free"
+    system_prompt: |
+      You are a health data ingestion specialist. Validate and normalize health tracking inputs.
+      Ensure data quality and format consistency for downstream processing.
+    tools: ["data_validation", "normalization"]
+
+  metrics_analysis:
+    type: "executor"
+    model_id: "openrouter/deepseek/deepseek-chat-v3.1:free"
+    system_prompt: |
+      You are a health metrics analyst. Calculate health scores from raw data and provide insights.
+      Focus on activity levels, sleep quality, hydration, and overall wellness indicators.
+    tools: ["calculation", "trend_analysis"]
+
+  coaching:
+    type: "executor"
+    model_id: "openrouter/deepseek/deepseek-chat-v3.1:free"
+    system_prompt: |
+      You are a personalized health coach. Provide actionable, encouraging health recommendations
+      based on user metrics and goals. Be supportive and practical in your advice.
+    tools: ["recommendation_engine", "goal_tracking"]
+
+  reporting:
+    type: "executor"
+    model_id: "openrouter/deepseek/deepseek-chat-v3.1:free"
+    system_prompt: |
+      You are a health report generator. Create comprehensive, structured weekly health summaries.
+      Include trends, achievements, areas for improvement, and actionable next steps.
+    tools: ["report_generation", "data_visualization"]
+
+task_flows:
+  weekly_health_analysis:
+    sequence: ["data_ingestion", "metrics_analysis", "coaching", "reporting"]
+    parallel: false
+
+  quick_analysis:
+    sequence: ["data_ingestion", "metrics_analysis"]
+    parallel: false
+
+  coaching_session:
+    sequence: ["data_ingestion", "coaching"]
+    parallel: false

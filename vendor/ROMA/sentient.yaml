@@ -1,0 +1,116 @@
+# Framework-Level Configuration ONLY
+# (Your sophisticated agents are already configured in agents/configurations.py)
+
+# LLM Infrastructure (used by your AgnoAgents)
+llm:
+  provider: "openrouter"  # Since you're using OpenRouter
+  api_key: "your-openrouter-key"  # Or OPENROUTER_API_KEY env var
+  timeout: 300.0  # Increased to 5 minutes for complex code execution and reasoning
+  max_retries: 3
+
+# Cache System (for your sophisticated agent responses)  
+cache:
+  enabled: true
+  cache_type: "file"  # Persist between sessions
+  # cache_dir is now automatically set to runtime/cache/agent
+  ttl_seconds: 7200  # 2 hours (longer for complex reasoning)
+  max_size: 500  # Fewer but larger responses
+
+# Execution Framework
+execution:
+  max_concurrent_nodes: 10  # Increased from 3 for better parallelization
+  max_parallel_nodes: 8     # New: Maximum nodes to process in parallel batches
+  max_execution_steps: 500  # More steps for deep reasoning
+  rate_limit_rpm: 30  # Reduced from 60 to avoid Gemini rate limits
+  enable_hitl: false
+  hitl_timeout_seconds: 1200.0  # 10 minutes for human review
+  node_execution_timeout_seconds: 2400.0  # 40 minutes max for overall task execution
+  
+  # New: State management optimization
+  state_batch_size: 50      # Batch size for state updates
+  state_batch_timeout_ms: 100  # Max time before flushing state batch
+  enable_state_compression: true  # Compress large state objects
+  
+  # New: WebSocket optimization
+  ws_batch_size: 50         # Batch size for WebSocket messages
+  ws_batch_timeout_ms: 100  # Max time before sending WebSocket batch
+  enable_ws_compression: true  # Compress WebSocket payloads
+  enable_diff_updates: true    # Send differential updates only
+  
+  # Immediate slot filling for better concurrency
+  enable_immediate_slot_fill: true  # Fill slots as soon as they become available
+  
+  # Enhanced timeout strategy with escalation
+  timeout_strategy:
+    # Warning threshold (warn about stuck nodes)
+    warning_threshold_seconds: 60.0   # 1 minute - catch hanging executors faster
+    # Soft timeout (attempt recovery)
+    soft_timeout_seconds: 180.0       # 3 minutes - faster recovery
+    # Hard timeout (force transitions)
+    hard_timeout_seconds: 300.0       # 5 minutes - more aggressive
+    # Maximum recovery attempts per node
+    max_recovery_attempts: 3
+    # Enable aggressive recovery for deadlock situations
+    enable_aggressive_recovery: true
+  
+  # CHANGED: Default to root plan only - only review the initial high-level plan
+  hitl_root_plan_only: false  # Set to true to only review root node's plan
+  
+  # NEW: Force root nodes to always plan (skip atomizer) - prevents atomic classification of complex queries
+  force_root_node_planning: true  # Set to false to allow atomizer to decide for root nodes
+  
+  # NEW: Skip atomization entirely - forces hierarchy/depth-based execution decisions
+  skip_atomization: true  # Set to true to bypass atomizer and use max_recursion_depth rules
+  
+  # These are ignored when hitl_root_plan_only is true
+  hitl_after_plan_generation: false
+  hitl_after_modified_plan: false
+  hitl_after_atomizer: false
+  hitl_before_execute: false
+
+# Logging - Clean and readable
+logging:
+  level: "INFO"
+  enable_console: true
+  enable_file: true
+  # file_path is now automatically set to runtime/logs/sentient.log
+  file_rotation: "10 MB"     # Rotate by size
+  file_retention: 3          # Keep only 3 files (must be number, not string)
+  
+  # Console style options:
+  # - "clean": Just messages with smart spacing and colors (default)
+  # - "timestamp": Messages with timestamps
+  # - "detailed": Full details with time, level, module, and message
+  console_style: "clean"
+  
+  # Filter noisy logs to separate files or suppress them
+  module_levels:
+    # Suppress or redirect noisy components
+    "sentientresearchagent.server.services.broadcast_service": "WARNING"  # Only warnings and errors
+    "sentientresearchagent.server.services.project_service": "WARNING"    # Reduce auto-save noise
+    "sentientresearchagent.core.project_manager": "WARNING"              # Reduce save/broadcast noise
+    "sentientresearchagent.hierarchical_agent_framework.graph.graph_serializer": "WARNING"  # Reduce serialization noise
+    
+    # Keep important execution flow at INFO level
+    "sentientresearchagent.hierarchical_agent_framework.orchestration": "INFO"
+    "sentientresearchagent.hierarchical_agent_framework.graph.cycle_manager": "INFO"
+    "sentientresearchagent.hierarchical_agent_framework.node": "INFO"
+    "sentientresearchagent.hierarchical_agent_framework.node_handlers": "INFO"
+
+# Experiment Configuration
+experiment:
+  base_dir: "experiments"  # Base directory for all experiment outputs
+  results_dir: "results"  # Subdirectory for results
+  emergency_backup_dir: "emergency_backups"  # Subdirectory for emergency backups
+  configs_dir: "configs"  # Subdirectory for experiment configs
+  retention_days: 30  # Keep experiment results for 30 days
+  auto_cleanup: true  # Automatically clean old results
+  timestamp_format: "%Y%m%d_%H%M%S"  # Format for timestamped directories
+
+# Environment
+environment: "research"
+
+# Default Agent Profile
+default_profile: "general_agent"
+
+# NO AGENT CONFIGURATION HERE - Your agents are already perfectly configured!

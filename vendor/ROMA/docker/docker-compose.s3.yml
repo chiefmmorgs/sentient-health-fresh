@@ -1,0 +1,17 @@
+# Docker Compose override for S3 mounting
+# Host mounts S3 first, then bind mounts to container for host visibility
+version: '3.8'
+
+services:
+  backend:
+    volumes:
+      # Bind mount host S3 directory to container
+      # Host must mount S3 at this path first (via setup.sh)
+      - ${S3_MOUNT_DIR:-/opt/sentient}:${S3_MOUNT_DIR:-/opt/sentient}
+    # FUSE capabilities kept for compatibility but not needed for host-mounted approach
+    devices:
+      - "/dev/fuse:/dev/fuse"
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined

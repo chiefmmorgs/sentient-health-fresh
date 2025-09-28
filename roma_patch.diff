@@ -1,0 +1,355 @@
+diff --git a/docker-compose.yml b/docker-compose.yml
+index 3b18d3a..8b9f2a1 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -1,3 +1,57 @@
++# ROMA integration: adds roma-backend and roma-frontend alongside your API.
++# If your repo already had services, these are additive.
++version: "3.9"
++services:
++  roma-backend:
++    build: ./vendor/ROMA/docker/backend
++    env_file: ./.env
++    volumes:
++      - ./sentient.yaml:/app/sentient.yaml:ro
++      - ./roma_config:/app/roma_config:ro
++    ports:
++      - "8001:8001"
++    restart: unless-stopped
++
++  roma-frontend:
++    build: ./vendor/ROMA/frontend
++    env_file: ./.env
++    ports:
++      - "3000:3000"
++    depends_on:
++      - roma-backend
++    restart: unless-stopped
++
++  api:
++    build: .
++    env_file: ./.env
++    volumes:
++      - ./data:/app/data
++      - ./roma_config:/app/roma_config:ro
++    ports:
++      - "8000:8000"
++    depends_on:
++      - roma-backend
++    restart: unless-stopped
++
+diff --git a/roma_config/health.yaml b/roma_config/health.yaml
+new file mode 100644
+index 0000000..f0b6a5d
+--- /dev/null
++++ b/roma_config/health.yaml
+@@ -0,0 +1,54 @@
++# ROMA Skill: Health Weekly Report
++# This declares the Atomizer → Planner → Executors → Aggregator pipeline.
++skill: health_weekly_report
++
++# Simple atomizer heuristic: if weekly data present, run the full plan; else start with ingest.
++atomizer:
++  rule: |
++    if "data" in task and isinstance(task["data"], dict) and task["data"].get("week"):
++        return "plan"
++    return "execute:health.ingest"
++
++planner:
++  plan:
++    - execute: health.ingest
++    - execute: health.metrics
++    - execute: health.coach
++    - aggregate: health.aggregate
++
++executors:
++  - ref: health.ingest
++  - ref: health.metrics
++  - ref: health.coach
++
++aggregator:
++  - ref: health.aggregate
++
++registry:
++  # Map the refs above to your Python classes.
++  # ROMA will import these paths; keep them importable from your project root.
++  executors:
++    health.ingest: "roma_agents.health_executors:DataIngestionExecutor"
++    health.metrics: "roma_agents.health_executors:MetricsAnalysisExecutor"
++    health.coach: "roma_agents.health_executors:CoachingExecutor"
++  aggregators:
++    health.aggregate: "roma_agents.health_executors:WeeklyReportAggregator"
+diff --git a/roma_agents/health_executors.py b/roma_agents/health_executors.py
+new file mode 100644
+index 0000000..c3dd3a7
+--- /dev/null
++++ b/roma_agents/health_executors.py
+@@ -0,0 +1,172 @@
++from __future__ import annotations
++from typing import Any, Dict, List, Tuple
++import statistics
++
++# Minimal, fast, dependency-light executors for your health pipeline.
++# These are ROMA-agnostic; ROMA loads them by dotted path from health.yaml.
++
++def _weekly_summary(raw: Dict[str, Any]) -> Dict[str, Any]:
++    steps = raw.get("steps", 0)
++    sleep_hours = raw.get("sleep_hours", 0)
++    workouts = raw.get("workouts", 0)
++    water_liters = raw.get("water_liters", 0.0)
++    return {
++        "steps": int(steps),
++        "sleep_hours": float(sleep_hours),
++        "workouts": int(workouts),
++        "water_liters": float(water_liters),
++    }
++
++
++class DataIngestionExecutor:
++    name = "health.ingest"
++    description = "Validate & normalize raw health metrics."
++
++    async def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
++        data = task.get("data", {})
++        if not isinstance(data, dict):
++            raise ValueError("Expected 'data' to be an object with weekly values.")
++        normalized = _weekly_summary(data)
++        return {"normalized": normalized}
++
++
++class MetricsAnalysisExecutor:
++    name = "health.metrics"
++    description = "Compute basic scores and summaries."
++
++    async def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
++        norm = task.get("normalized") or task.get("data")
++        if not norm:
++            raise ValueError("No normalized data provided to metrics executor.")
++        steps = norm["steps"]
++        sleep = norm["sleep_hours"]
++        workouts = norm["workouts"]
++        water = norm["water_liters"]
++
++        # Naive scoring — tune as needed.
++        step_score = min(100, int((steps / 70000) * 100))          # target ~10k/day
++        sleep_score = min(100, int((sleep / 56.0) * 100))          # target 8h/day
++        workout_score = min(100, int((workouts / 4.0) * 100))      # target 4/wk
++        hydration_score = min(100, int((water / 14.0) * 100))      # target 2L/day
++        total = int(statistics.mean([step_score, sleep_score, workout_score, hydration_score]))
++        return {
++            "scores": {
++                "steps": step_score,
++                "sleep": sleep_score,
++                "workouts": workout_score,
++                "hydration": hydration_score,
++                "overall": total,
++            },
++            "normalized": norm,
++        }
++
++
++class CoachingExecutor:
++    name = "health.coach"
++    description = "Turn metrics into human-readable coaching tips."
++
++    async def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
++        scores = task.get("scores", {})
++        norm = task.get("normalized", {})
++        tips: List[str] = []
++        if scores.get("steps", 0) < 80:
++            tips.append("Aim for short walks after meals to increase daily steps.")
++        if scores.get("sleep", 0) < 80:
++            tips.append("Try a consistent bedtime and limit screens 60 minutes before sleep.")
++        if scores.get("workouts", 0) < 80:
++            tips.append("Schedule two 30–40 min strength sessions this week.")
++        if scores.get("hydration", 0) < 80:
++            tips.append("Keep a water bottle visible; sip regularly to reach ~2L/day.")
++        if not tips:
++            tips.append("Great week! Keep your current routine and consider a recovery day.")
++        return {"coaching": tips, "scores": scores, "normalized": norm}
++
++
++class WeeklyReportAggregator:
++    name = "health.aggregate"
++    description = "Aggregate metrics & coaching into a weekly report payload."
++
++    async def aggregate(self, parts: Dict[str, Any]) -> Dict[str, Any]:
++        # parts is expected to include outputs from metrics + coach
++        scores = parts.get("scores", {})
++        norm = parts.get("normalized", {})
++        coaching = parts.get("coaching", [])
++        report = {
++            "week": norm,
++            "scores": scores,
++            "coaching": coaching,
++            "summary": f"Overall score {scores.get('overall', 0)}/100.",
++        }
++        return {"report": report}
+diff --git a/roma_engine/sentient_roma_runner.py b/roma_engine/sentient_roma_runner.py
+new file mode 100644
+index 0000000..5a8c6f8
+--- /dev/null
++++ b/roma_engine/sentient_roma_runner.py
+@@ -0,0 +1,80 @@
++from __future__ import annotations
++from typing import Any, Dict
++import importlib
++import pathlib
++import types
++
++"""
++Thin adapter that calls a ROMA-style plan/execute/aggregate pipeline using the
++skill registry declared in `roma_config/health.yaml`.
++
++Notes:
++- When you later wire the official ROMA runtime, replace the body of `solve`
++  with the call into ROMA's planner entrypoint. The interop surface (skill:str, task:dict)
++  stays the same so your API doesn't change.
++"""
++
++def _load_registry() -> Dict[str, Any]:
++    # Minimal loader that reads the python targets we listed in health.yaml's `registry`.
++    # We avoid parsing YAML here to keep this adapter tiny; instead we hard-map the paths.
++    # If you move class names, update here or swap to a parser.
++    mapping = {
++        "health.ingest": "roma_agents.health_executors:DataIngestionExecutor",
++        "health.metrics": "roma_agents.health_executors:MetricsAnalysisExecutor",
++        "health.coach": "roma_agents.health_executors:CoachingExecutor",
++        "health.aggregate": "roma_agents.health_executors:WeeklyReportAggregator",
++    }
++    resolved: Dict[str, Any] = {}
++    for key, target in mapping.items():
++        mod_name, cls_name = target.split(":")
++        mod = importlib.import_module(mod_name)
++        resolved[key] = getattr(mod, cls_name)
++    return resolved
++
++
++async def solve(skill: str, task: Dict[str, Any]) -> Dict[str, Any]:
++    """
++    Temporary local planner: mimics ROMA's flow defined in roma_config/health.yaml.
++    Replace this with the official ROMA call when you are ready.
++    """
++    if skill != "health_weekly_report":
++        raise ValueError(f"Unknown skill: {skill}")
++
++    reg = _load_registry()
++    # Atomizer heuristic:
++    if "data" in task and isinstance(task["data"], dict) and task["data"].get("week"):
++        mode = "plan"
++    else:
++        mode = "execute:health.ingest"
++
++    state: Dict[str, Any] = dict(task)
++
++    if mode == "plan":
++        # Execute pipeline: ingest -> metrics -> coach -> aggregate
++        ingest = reg["health.ingest"]()
++        state.update(await ingest.execute(state))
++        metrics = reg["health.metrics"]()
++        state.update(await metrics.execute(state))
++        coach = reg["health.coach"]()
++        state.update(await coach.execute(state))
++        agg = reg["health.aggregate"]()
++        result = await agg.aggregate(state)
++        return result
++    else:
++        # Single-executor mode (ingest only) returns normalized output
++        _, ref = mode.split(":")
++        exec_cls = reg[ref]
++        exe = exec_cls()
++        out = await exe.execute(state)
++        return out
+diff --git a/sentient_roma_api.py b/sentient_roma_api.py
+index 4a1e9fa..1a5a4b2 100644
+--- a/sentient_roma_api.py
++++ b/sentient_roma_api.py
+@@ -1,6 +1,36 @@
+-from fastapi import FastAPI
+-app = FastAPI()
++from fastapi import FastAPI, HTTPException
++from pydantic import BaseModel
++from typing import Any, Dict
++
++try:
++    # Use our thin adapter which we will later swap to the official ROMA call.
++    from roma_engine.sentient_roma_runner import solve as roma_solve
++except Exception as e:  # pragma: no cover
++    roma_solve = None
++
++app = FastAPI(title="Sentient Health Tracker (ROMA)")
++
++class WeeklyData(BaseModel):
++    data: Dict[str, Any]
+ 
+ @app.get("/health")
+ def health():
+     return {"status": "ok"}
++
++@app.post("/weekly-report")
++async def weekly_report(payload: WeeklyData):
++    if roma_solve is None:
++        raise HTTPException(status_code=500, detail="ROMA runtime not available")
++    try:
++        result = await roma_solve("health_weekly_report", {"data": payload.data})
++        return result
++    except Exception as e:
++        raise HTTPException(status_code=400, detail=str(e))
++
++# Optional convenience: single-step normalize endpoint (atomizer → execute:ingest)
++@app.post("/normalize")
++async def normalize(payload: WeeklyData):
++    if roma_solve is None:
++        raise HTTPException(status_code=500, detail="ROMA runtime not available")
++    return await roma_solve("health_weekly_report", {"data": payload.data})
+diff --git a/README.md b/README.md
+index 2a1a2b3..9d4b7d1 100644
+--- a/README.md
++++ b/README.md
+@@ -1,3 +1,48 @@
+ # Sentient Health Tracker
++
++## ROMA Mode (Meta-Agent)
++
++This repo is wired to the official **ROMA** framework as a meta-agent skill:
++
++- Skill: `health_weekly_report`
++- Pipeline: Atomizer → Planner → Executors (`ingest`, `metrics`, `coach`) → Aggregator (`weekly report`)
++- ROMA backend (port **8001**) + ROMA frontend (port **3000**) + this API (port **8000**)
++
++### Prereqs
++- Docker + Docker Compose
++- Python 3.10+ (for local dev)
++- An OpenRouter API key in `.env` (or keep placeholders for local tests)
++
++### Quickstart
++```bash
++# one-time: ensure ROMA submodule exists and configs are present
++git submodule update --init --recursive
++
++# build & run services
++docker compose up -d --build
++
++# API docs
++open http://localhost:8000/docs
++# ROMA UI
++open http://localhost:3000
++```
++
++### Test the weekly report
++```bash
++curl -X POST http://127.0.0.1:8000/weekly-report \
++  -H "Content-Type: application/json" \
++  -d '{"data":{"week":"2025-09-15","steps":72000,"sleep_hours":49,"workouts":4,"water_liters":14}}'
++```
++Expected (shape):
++```json
++{
++  "report": {
++    "week": {...},
++    "scores": {"overall": 90, "...": "..."},
++    "coaching": ["..."],
++    "summary": "Overall score 90/100."
++  }
++}
++```

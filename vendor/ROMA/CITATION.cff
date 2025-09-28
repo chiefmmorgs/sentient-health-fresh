@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "SentientResearchAgent: A Hierarchical AI Agent Framework for Research and Analysis"
+authors:
+  - family-names: Al-Zubi
+    given-names: Salah
+    email: salaheddin@sentient.xyz
+    affiliation: Sentient
+  - family-names: Nama
+    given-names: Baran
+    email: baran@sentient.xyz
+    affiliation: Sentient
+  - family-names: Kaz
+    given-names: Arda
+    email: arda@sentient.xyz
+    affiliation: Sentient
+  - family-names: Oh
+    given-names: Sewoong
+    email: sewoong@sentient.xyz
+    affiliation: Sentient
+type: software
+repository-code: "https://github.com/sentient-agi/ROMA"
+license: MIT
+version: 0.1.0
+date-released: 2025-09-01
+keywords:
+  - artificial intelligence
+  - multi-agent systems
+  - hierarchical task decomposition
+  - research automation
+  - question answering
+  - natural language processing
+abstract: |
+  SentientResearchAgent is a hierarchical AI agent framework designed for 
+  sophisticated research and analysis tasks. The framework enables complex 
+  multi-step research workflows through intelligent task decomposition, 
+  specialized agent collaboration, and human-in-the-loop oversight. It 
+  provides a flexible architecture for building and evaluating research 
+  agents with support for parallel execution, caching, and comprehensive 
+  logging.

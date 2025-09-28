@@ -1,0 +1,587 @@
+# Production Agent Configuration
+# This replaces the scattered definitions with a centralized, maintainable configuration
+
+agents:
+  # =============================================================================
+  # PLANNER AGENTS - Break down complex goals into manageable sub-tasks
+  # =============================================================================
+  
+  - name: "CoreResearchPlanner"
+    type: "planner"
+    adapter_class: "PlannerAdapter"
+    description: "Specialized planner for research-focused tasks"
+    model:
+      provider: "litellm"
+      model_id: "openai/o3-2025-04-16" #"openrouter/anthropic/claude-sonnet-4"
+      # temperature: 0.7
+    prompt_source: "prompts.planner_prompts.PLANNER_SYSTEM_MESSAGE"
+    response_model: "PlanOutput"
+    registration:
+      action_keys:
+        - action_verb: "plan"
+          task_type: "WRITE"
+      named_keys: ["CoreResearchPlanner", "default_planner"]
+    enabled: false
+
+  - name: "EnhancedSearchPlanner"
+    type: "planner"
+    adapter_class: "PlannerAdapter"
+    description: "Specialized planner optimized for search-focused research tasks with date awareness and parallel execution"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/anthropic/claude-sonnet-4"  # Switched from slow o3 model for 10x faster planning
+      temperature: 0.35      
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.planner_prompts.ENHANCED_SEARCH_PLANNER_SYSTEM_MESSAGE"
+    response_model: "PlanOutput"
+    registration:
+      action_keys:
+        - action_verb: "plan"
+          task_type: "SEARCH"
+      named_keys: ["EnhancedSearchPlanner", "search_planner"]
+    enabled: true
+  
+  - name: "EnhancedThinkPlanner"
+    type: "planner"
+    adapter_class: "PlannerAdapter"
+    description: "Specialized planner optimized for search-focused research tasks with date awareness and parallel execution"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/anthropic/claude-sonnet-4"  # Switched from slow o3 model for 10x faster planning
+      temperature: 0.35
+    # agno_params:
+    #   reasoning: true
+      # temperature: 0.7
+    prompt_source: "prompts.planner_prompts.ENHANCED_THINK_PLANNER_SYSTEM_MESSAGE"
+    response_model: "PlanOutput"
+    registration:
+      action_keys:
+        - action_verb: "plan"
+          task_type: "THINK"
+      named_keys: ["EnhancedThinkPlanner", "think_planner"]
+    enabled: true
+
+  - name: "EnhancedWritePlanner"
+    type: "planner"
+    adapter_class: "PlannerAdapter"
+    description: "Specialized planner optimized for search-focused research tasks with date awareness and parallel execution"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/anthropic/claude-sonnet-4"  # Switched from slow o3 model for 10x faster planning
+      temperature: 0.35
+      # temperature: 0.7
+    # agno_params:
+    #   reasoning: true
+      # temperature: 0.7
+    prompt_source: "prompts.planner_prompts.ENHANCED_WRITE_PLANNER_SYSTEM_MESSAGE"
+    response_model: "PlanOutput"
+    registration:
+      action_keys:
+        - action_verb: "plan"
+          task_type: "WRITE"
+      named_keys: ["EnhancedWritePlanner", "write_planner"]
+    enabled: true
+
+  - name: "DeepResearchPlanner"
+    type: "planner"
+    adapter_class: "PlannerAdapter"
+    description: "Master planner specialized in high-level research project decomposition and strategy"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/anthropic/claude-sonnet-4"  # Switched from slow o3 model for 10x faster planning
+      temperature: 0.35
+      # temperature: 0.7
+    prompt_source: "prompts.planner_prompts.DEEP_RESEARCH_PLANNER_SYSTEM_MESSAGE"
+    response_model: "PlanOutput"
+    registration:
+      action_keys:
+        - action_verb: "plan"
+          task_type: "WRITE"
+      named_keys: ["DeepResearchPlanner"]
+    enabled: true
+
+  - name: "GeneralTaskSolver"
+    type: "planner"
+    adapter_class: "PlannerAdapter"
+    description: "Master planner specialized in high-level research project decomposition and strategy"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/anthropic/claude-sonnet-4"  # Switched from slow o3 model for 10x faster planning
+      temperature: 0.3
+    # agno_params:
+    #   reasoning: true
+      # temperature: 0.7
+    prompt_source: "prompts.planner_prompts.GENERAL_TASK_SOLVER_SYSTEM_MESSAGE"
+    response_model: "PlanOutput"
+    registration:
+      action_keys:
+        - action_verb: "plan"
+          task_type: "WRITE"
+      named_keys: ["GeneralTaskSolver"]
+    enabled: true
+
+  # =============================================================================
+  # EXECUTOR AGENTS - Execute atomic tasks (search, write, think)
+  # =============================================================================
+
+  - name: "SearchExecutor"
+    type: "executor"
+    adapter_class: "ExecutorAdapter"
+    description: "LLM-based search executor with web search tools"
+    model:
+      provider: "openai"
+      model_id: "gpt-4.1"
+    prompt_source: "prompts.executor_prompts.SEARCH_EXECUTOR_SYSTEM_MESSAGE"
+    response_model: "WebSearchResultsOutput"
+    tools: ["DuckDuckGoTools", "WikipediaTools", "web_search"]
+    registration:
+      named_keys: ["SearchExecutor", "default_search_executor"]
+    enabled: false
+
+  - name: "BasicReasoningExecutor"
+    type: "executor"
+    adapter_class: "ExecutorAdapter"
+    description: "Performs Analysis and Synthesis of information"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-pro"  # Switched from slow o3 model for faster execution
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.executor_prompts.REASONING_EXECUTOR_SYSTEM_MESSAGE"
+    tools: 
+      - name: "PythonTools"
+        params:
+          save_and_run: false  # Disable automatic execution of Python code
+      - "ReasoningTools"
+    registration:
+      action_keys:
+        - action_verb: "execute"
+          task_type: "THINK"
+      named_keys: ["BasicReasoningExecutor"]
+    enabled: true
+
+  - name: "BasicReportWriter"
+    type: "executor"
+    adapter_class: "ExecutorAdapter"
+    description: "Writes detailed reports based on provided context"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-pro"
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.executor_prompts.BASIC_REPORT_WRITER_SYSTEM_MESSAGE"
+    registration:
+      action_keys:
+        - action_verb: "execute"
+          task_type: "WRITE"
+      named_keys: ["BasicReportWriter"]
+    enabled: true
+
+  - name: "SmartWebSearcher"
+    type: "executor"
+    adapter_class: "ExecutorAdapter"
+    description: "Intelligent searcher that combines AI-powered search with Wikipedia"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-pro"  # Switched from slow o3 model for faster search
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.executor_prompts.SMART_WEB_SEARCHER_SYSTEM_MESSAGE"
+    tools: ["web_search", "WikipediaTools"]
+    registration:
+      action_keys:
+        - action_verb: "execute"
+          task_type: "SEARCH"
+      named_keys: ["SmartWebSearcher"]
+    enabled: false
+
+  # =============================================================================
+  # CUSTOM SEARCH AGENTS - Direct API-based search without LLM overhead
+  # =============================================================================
+
+  - name: "OpenAICustomSearcher"
+    type: "custom_search"
+    adapter_class: "OpenAICustomSearchAdapter"
+    description: "Direct API-based search using OpenAI's search capabilities"
+    adapter_params:
+      # model_id: "gpt-4o"
+      search_context_size: "high"  # Options: "medium", "high", "low" (works with both OpenAI and OpenRouter)
+      # Optional: use OpenRouter instead of OpenAI API (requires OPENROUTER_API_KEY)
+      use_openrouter: true
+      model_id: "openai/gpt-4o-search-preview"  # When using OpenRouter
+    registration:
+      action_keys:
+        - action_verb: "execute"
+          task_type: "SEARCH"
+      named_keys: ["OpenAICustomSearcher", "default_openai_searcher"]
+    enabled: true
+
+  - name: "GeminiCustomSearcher"
+    type: "custom_search"
+    adapter_class: "GeminiCustomSearchAdapter"
+    description: "Direct API-based search using Google Gemini's search capabilities"
+    adapter_params:
+      model_id: "gemini-2.5-flash"
+    registration:
+      action_keys:
+        - action_verb: "execute"
+          task_type: "SEARCH"
+      named_keys: ["GeminiCustomSearcher", "default_gemini_searcher", "gemini_searcher"]
+    enabled: false
+
+  - name: "ExaComprehensiveSearcher"
+    type: "custom_search"
+    adapter_class: "ExaCustomSearchAdapter"
+    description: "Comprehensive search using Exa API with LiteLLM processing - prioritizes reliable sources"
+    adapter_params:
+      model_id: "openrouter/google/gemini-2.5-pro"  # Can be any LiteLLM-supported model
+      num_results: 5      # Number of Exa search results to retrieve
+      # include_domains: ["en.wikipedia.org", "imdb.com"]
+    registration:
+      action_keys:
+        - action_verb: "execute"
+          task_type: "SEARCH"
+      named_keys: ["ExaComprehensiveSearcher", "exa_searcher", "comprehensive_searcher"]
+    enabled: false
+
+  # =============================================================================
+  # AGGREGATOR AGENTS - Combine results from sub-tasks
+  # =============================================================================
+
+  - name: "DefaultAggregator"
+    type: "aggregator"
+    adapter_class: "AggregatorAdapter"
+    description: "Synthesizes results from multiple child tasks"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-pro"
+    prompt_source: "prompts.aggregator_prompts.DEFAULT_AGGREGATOR_SYSTEM_MESSAGE"
+    registration:
+      action_keys:
+        - action_verb: "aggregate"
+          task_type: null
+      named_keys: ["default_aggregator"]
+    enabled: true
+
+  - name: "SearchAggregator"
+    type: "aggregator"
+    adapter_class: "AggregatorAdapter"
+    description: "Specialized aggregator for combining search results with deduplication and relevance ranking"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-pro"
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.aggregator_prompts.SEARCH_AGGREGATOR_SYSTEM_MESSAGE"
+    registration:
+      action_keys:
+        - action_verb: "aggregate"
+          task_type: "SEARCH"
+      named_keys: ["SearchAggregator", "search_aggregator"]
+    enabled: true
+
+  - name: "ThinkAggregator"
+    type: "aggregator"
+    adapter_class: "AggregatorAdapter"
+    description: "Specialized aggregator for synthesizing analytical outputs and drawing logical conclusions"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-pro"
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.aggregator_prompts.THINK_AGGREGATOR_SYSTEM_MESSAGE"
+    registration:
+      action_keys:
+        - action_verb: "aggregate"
+          task_type: "THINK"
+      named_keys: ["ThinkAggregator", "think_aggregator"]
+    enabled: true
+
+  - name: "WriteAggregator"
+    type: "aggregator"
+    adapter_class: "AggregatorAdapter"
+    description: "Specialized aggregator for combining written content with focus on narrative flow and coherence"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-pro"
+    prompt_source: "prompts.aggregator_prompts.WRITE_AGGREGATOR_SYSTEM_MESSAGE"
+    registration:
+      action_keys:
+        - action_verb: "aggregate"
+          task_type: "WRITE"
+      named_keys: ["WriteAggregator", "write_aggregator"]
+    enabled: true
+
+  - name: "RootResearchAggregator"
+    type: "aggregator"
+    adapter_class: "AggregatorAdapter"
+    description: "Master aggregator for root-level research tasks with executive synthesis and strategic recommendations"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-pro"
+    prompt_source: "prompts.aggregator_prompts.ROOT_RESEARCH_AGGREGATOR_SYSTEM_MESSAGE"
+    registration:
+      named_keys: ["RootResearchAggregator", "root_research_aggregator"]
+    enabled: true
+
+  - name: "RootAnalysisAggregator"
+    type: "aggregator"
+    adapter_class: "AggregatorAdapter"
+    description: "Master aggregator for root-level analysis tasks with decisive conclusions and strategic recommendations"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-pro"
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.aggregator_prompts.ROOT_ANALYSIS_AGGREGATOR_SYSTEM_MESSAGE"
+    registration:
+      named_keys: ["RootAnalysisAggregator", "root_analysis_aggregator"]
+    enabled: true
+
+  - name: "RootGeneralAggregator"
+    type: "aggregator"
+    adapter_class: "AggregatorAdapter"
+    description: "Master aggregator for root-level general tasks with comprehensive synthesis and actionable insights"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-pro"
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.aggregator_prompts.ROOT_GENERAL_AGGREGATOR_SYSTEM_MESSAGE"
+    registration:
+      named_keys: ["RootGeneralAggregator", "root_general_aggregator"]
+    enabled: true
+
+  # =============================================================================
+  # CRYPTO ANALYTICS AGENTS
+  # =============================================================================
+
+  - name: "CryptoAnalyticsPlanner"
+    type: "planner"
+    adapter_class: "PlannerAdapter"
+    description: "Specialized planner for cryptocurrency and DeFi analytics with deep domain expertise"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-flash:nitro"  # Switched from slow o3 model for 10x faster planning
+      temperature: 0.35
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.planner_prompts.CRYPTO_ANALYTICS_PLANNER_SYSTEM_MESSAGE"
+    response_model: "PlanOutput"
+    registration:
+      action_keys:
+        - action_verb: "plan"
+          task_type: "WRITE"
+      named_keys: ["CryptoAnalyticsPlanner", "crypto_planner"]
+    enabled: true
+
+  - name: "CryptoSearchPlanner"
+    type: "planner"
+    adapter_class: "PlannerAdapter"
+    description: "Specialized planner for crypto-specific search tasks optimized for blockchain data retrieval"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-flash:nitro"  # Switched from slow o3 model for 10x faster planning
+      temperature: 0.35
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.planner_prompts.CRYPTO_SEARCH_PLANNER_SYSTEM_MESSAGE"
+    response_model: "PlanOutput"
+    registration:
+      action_keys:
+        - action_verb: "plan"
+          task_type: "SEARCH"
+      named_keys: ["CryptoSearchPlanner", "crypto_search_planner"]
+    enabled: true
+
+  - name: "CryptoMarketAnalyzer"
+    type: "executor"
+    adapter_class: "ExecutorAdapter"
+    description: "Advanced crypto market analyst for technical analysis and on-chain metrics"
+    model:
+      provider: "litellm"
+      # model_id: "openrouter/deepseek/deepseek-r1-0528:nitro"  # Switched from slow o3 model for faster analysis
+      model_id: "openrouter/anthropic/claude-sonnet-4"
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.executor_prompts.CRYPTO_MARKET_ANALYZER_SYSTEM_MESSAGE"
+    tools: 
+      - "ReasoningTools"
+    toolkits:
+      - name: "E2BTools"
+        params:
+          timeout: 86400
+          filesystem: true
+          command_execution: true
+          sandbox_options:
+            template: "sentient-e2b-s3"
+      - name: "BinanceToolkit"
+        params:
+          default_market_type: "spot"
+          symbols: ['ICPUSD', 'POLUSD', 'LTCUSD', 'IOTAUSD', 'CRVUSDT', 'MKRUSDT', 'WBTCBTC', 'ASTRUSDT', 'OPUSDT', 'MASKUSDT', 'CHZUSDT', 'SHIBUSD', 'ARBUSDT', 'JTOUSDT', 'TUSDT', 'BTCUSD', 'RENDERUSD', 'ONGUSDT', 'PEPEUSD', 'FILUSDT', 'VTHOUSDT', 'XRPUSD', 'FORTUSDT', 'AIXBTUSDT', 'NEARUSDT', 'TRUMPUSDT', 'XRPUSDT', 'OPUSD', 'MEUSDT', 'POLUSDT', 'ORCAUSDT', 'BOSONUSDT', 'GUSDT', 'SOLBTC', 'ONEUSD', 'ADABTC', 'FLOWUSDT', 'OCEANUSDT', 'ENSUSD', 'SUIUSD', 'SUSDT', 'STMXUSDT', 'ETHUSD', 'ALPINEUSDT', 'BNBUSD', 'PEPEUSDT', 'AVAXUSD', 'CRVUSD', 'YFIUSDT', 'FLOKIUSD', 'CTSIUSDT', 'ENAUSDT', 'SUSHIUSDT', 'JAMUSDT', 'ICPUSDT', 'ALGOUSDT', 'GTCUSDT', 'XECUSDT', 'FLUXUSDT', '1INCHUSDT', 'NMRUSDT', 'CELRUSDT', 'KDAUSDT', 'XLMUSD', 'MEUSD', 'IOSTUSDT', 'ADAUSDT', 'BONKUSD', 'ACHUSDT', 'STORJUSDT', 'ZECUSDT', 'FILUSD', 'MANAUSD', 'ALGOUSD', 'DGBUSDT', 'PORTOUSDT', 'MANAUSDT', 'FLOKIUSDT', 'ONEUSDT', 'LINKUSD', 'JUPUSDT', 'OGNUSDT', 'EOSUSDT', 'WIFUSDT', 'ETHBTC', 'GALAUSDT', 'LDOUSDT', 'PONDUSDT', 'SUSD', 'LAYERUSDT', 'VIRTUALUSDT', 'APEUSDT', 'ICXUSDT', 'FETUSD', 'LTCUSDT', 'BANDUSDT', 'TLMUSDT', 'FETUSDT', 'DASHUSDT', 'LTOUSDT', 'CELOUSDT', 'EGLDUSDT', 'BCHUSD', 'TRUMPUSD', 'HBARUSDT', 'RLCUSDT', 'REEFUSDT', 'SANDUSD', 'PROMUSDT', 'SOLUSDC', 'TFUELUSDT', 'ETCUSD', 'GALAUSD', 'METISUSD', 'XNOUSDT', 'XTZUSDT', 'LRCUSDT', 'EIGENUSD', 'VETUSD', 'LPTUSD', 'NEOUSDT', 'BONKUSDT', 'RAREUSDT', 'DOGEUSDT', 'XLMUSDT', 'EIGENUSDT', 'LAZIOUSDT', 'AAVEUSD', 'HYPEUSDT', 'HBARUSD', 'ZENUSDT', 'POLYXUSDT', 'SUIUSDT', 'KNCUSDT', 'BNBBTC', 'SHIBUSDT', 'COTIUSDT', 'SANDUSDT', 'AUDIOUSDT', 'SOLUSDT', 'ONTUSDT', 'QTUMUSDT', 'RVNUSD', 'VOXELUSDT', 'ENSUSDT', 'UNIUSDT', 'DAIUSDT', 'SNXUSDT', 'KDAUSD', 'BATUSDT', 'GLMUSDT', 'ZILUSD', 'ENJUSDT', 'COMPUSDT', 'BTCUSDC', 'SYSUSDT', 'ALICEUSDT', 'SKLUSDT', 'TURBOUSDT', 'BCHUSDT', 'ORBSUSDT', 'SUSHIUSD', 'BTRSTUSDT', 'FARTCOINUSDT', 'BLURUSDT', 'IMXUSDT', 'ZILUSDT', 'DATAUSDT', 'AVAXUSDT', 'SANTOSUSDT', 'DOTUSDT', 'MAGICUSDT', 'DUSDT', 'BNBUSDT', 'GRTUSD', 'SOLUSD', 'OXTUSDT', 'PNUTUSDT', 'KAVAUSDT', 'BICOUSDT', 'ETHUSDT', 'LPTUSDT', 'FORTHUSDT', 'LOOMUSDT', 'APTUSDT', 'TRACUSDT', 'QNTUSDT', 'ADAUSD', 'ILVUSDT', 'RVNUSDT', 'HYPEUSD', 'SPXUSDT', 'ADXUSDT', 'ETCUSDT', 'ZRXUSDT', 'LOKAUSDT', 'LINKUSDT', 'ATOMUSD', 'AXLUSDT', 'ROSEUSDT', 'CLVUSDT', 'PAXGUSDT', 'VETUSDT', 'BNTUSDT', 'IOTAUSDT', 'ATOMUSDT', 'USDTUSD', 'DGBUSD', 'RENDERUSDT', 'AXSUSDT', 'DOTUSD', 'REQUSDT', 'USDCUSDT', 'METISUSDT', 'DOGEUSD', 'API3USDT', 'APTUSD', 'KAITOUSDT', 'THETAUSD', 'WAXPUSDT', 'LSKUSDT', 'AAVEUSDT', 'GRTUSDT', 'THETAUSDT', 'NEIROUSDT', 'KSMUSDT', 'SLPUSDT', 'STGUSDT', 'DIAUSDT', 'UNIUSD', 'IOTXUSDT', 'JUPUSD', 'ANKRUSDT', 'NEARUSD', 'ADAUSDC', 'ETHUSDC', 'PENGUUSDT', 'BALUSDT', 'VTHOUSD', 'USDCUSD', 'RADUSDT', 'BTCUSDT']
+          data_dir: "./data/binance"
+          parquet_threshold: 10
+        available_tools:
+          - "get_current_price"
+          - "get_klines"
+          - "get_order_book"
+          - "get_symbol_ticker_change"
+          - "get_book_ticker"
+      - name: "CoingeckoToolkit"
+        params:
+          data_dir: "./data/coingecko"
+          parquet_threshold: 10
+        available_tools:
+          - "get_coin_info"
+          - "get_coin_price"
+          - "get_coin_market_chart"
+          - "get_multiple_coins_data"
+          - "get_historical_price"
+          - "get_token_price_by_contract"
+          - "search_coins_exchanges_categories"
+          - "get_coins_list"
+          - "get_coins_markets"
+          - "get_coin_ohlc"
+          - "get_global_crypto_data"
+      - name: "DefiLlamaToolkit"
+        params:
+          data_dir: "./data/defillama"
+          base_url: "https://api.llama.fi"
+          pro_base_url: "https://pro-api.llama.fi"
+          parquet_threshold: 10
+        available_tools:
+          - "get_protocols"
+          - "get_protocol_tvl"
+          - "get_protocol_fees"
+          - "get_chain_fees"
+          - "get_yield_pools"
+          - "get_active_users"
+          - "get_chain_assets"
+          - "get_protocol_detail"
+          - "get_chains"
+          - "get_chain_historical_tvl"
+      - name: "ArkhamToolkit"
+        params:
+          default_chain: "ethereum"
+          data_dir: "./data/arkham"
+          parquet_threshold: 10
+          supported_chains: ["ethereum", "bitcoin", "polygon", "avalanche", "bsc"]
+          include_entity_data: true
+        available_tools:
+          - "get_top_tokens"
+          - "get_token_holders"
+          - "get_token_top_flow"
+          - "get_supported_chains"
+          - "get_transfers"
+          - "get_token_balances"
+    registration:
+      action_keys:
+        - action_verb: "execute"
+          task_type: "THINK"
+      named_keys: ["CryptoMarketAnalyzer", "crypto_analyzer"]
+    enabled: true
+
+  - name: "CryptoResearchExecutor"
+    type: "executor"
+    adapter_class: "ExecutorAdapter"
+    description: "Comprehensive crypto research executor for deep blockchain and DeFi analysis"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-flash:nitro" 
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.executor_prompts.CRYPTO_RESEARCH_EXECUTOR_SYSTEM_MESSAGE"
+    registration:
+      action_keys:
+        - action_verb: "execute"
+          task_type: "WRITE"
+      named_keys: ["CryptoResearchExecutor", "crypto_writer"]
+    enabled: true
+
+  - name: "CryptoAnalyticsAggregator"
+    type: "aggregator"
+    adapter_class: "AggregatorAdapter"
+    description: "Specialized aggregator for crypto data synthesis and market insights"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-flash:nitro"
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.aggregator_prompts.CRYPTO_ANALYTICS_AGGREGATOR_SYSTEM_MESSAGE"
+    registration:
+      named_keys: ["CryptoAnalyticsAggregator", "crypto_aggregator"]
+    enabled: true
+
+  - name: "CryptoRootAggregator"
+    type: "aggregator"
+    adapter_class: "AggregatorAdapter"
+    description: "Master aggregator for executive-level crypto research synthesis and strategic insights"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-flash:nitro"
+    # agno_params:
+    #   reasoning: true
+    prompt_source: "prompts.aggregator_prompts.CRYPTO_ROOT_AGGREGATOR_SYSTEM_MESSAGE"
+    registration:
+      named_keys: ["CryptoRootAggregator", "crypto_root_aggregator"]
+    enabled: true
+
+  # =============================================================================
+  # ATOMIZER AGENTS - Determine if tasks need further breakdown
+  # =============================================================================
+
+  - name: "DefaultAtomizer"
+    type: "atomizer"
+    adapter_class: "AtomizerAdapter"
+    description: "Determines if tasks are atomic or need further planning"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/google/gemini-2.5-flash"
+    prompt_source: "prompts.atomizer_prompts.ATOMIZER_SYSTEM_MESSAGE"
+    response_model: "AtomizerOutput"
+    registration:
+      action_keys:
+        - action_verb: "atomize"
+          task_type: null
+      named_keys: ["default_atomizer"]
+    enabled: true
+
+  # =============================================================================
+  # PLAN MODIFIER AGENTS - Modify existing plans based on feedback
+  # =============================================================================
+
+  - name: "PlanModifier"
+    type: "plan_modifier"
+    adapter_class: "PlanModifierAdapter"
+    description: "Modifies existing plans based on user feedback"
+    model:
+      provider: "litellm"
+      model_id: "openrouter/anthropic/claude-sonnet-4"  # Switched from slow o3 model for 10x faster planning
+    # agno_params:
+    # temperature: 0.7
+    prompt_source: "prompts.plan_modifier_prompts.PLAN_MODIFIER_SYSTEM_PROMPT"
+    response_model: "PlanOutput"
+    registration:
+      action_keys:
+        - action_verb: "modify_plan"
+          task_type: null
+      named_keys: ["PlanModifier"]
+    enabled: true
+
+# =============================================================================
+# CONFIGURATION METADATA
+# =============================================================================
+metadata:
+  version: "1.0.0"
+  description: "Production agent configuration for Sentient Research Agent"
+  last_updated: "2024-01-01"
+  total_agents: 9
+  migration_status: "integrated_with_legacy"
+  features:
+    - "Structured output support"
+    - "Tool integration" 
+    - "Dynamic prompt resolution"
+    - "Flexible model providers"
+    - "LLM parameter configuration"
+    - "Legacy system compatibility"
