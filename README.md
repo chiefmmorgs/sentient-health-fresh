@@ -46,7 +46,7 @@ OpenRouter API key (free tier available at https://openrouter.ai/keys)
 ### 1) Clone
 
 ```bash
-git clone https://github.com/chiefmmorgs/Sentient-health-tracker-.git
+git clone https://github.com/chiefmmorgs/sentient-health-fresh.git
 cd sentient-health-fresh
 ```   
 
