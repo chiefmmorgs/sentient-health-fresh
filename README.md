@@ -1,16 +1,21 @@
 # 🤖 Sentient ROMA Health Tracker
 
 **AI-powered health analysis using the Sentient AGI ROMA framework.**  
-This Health Tracker is a thoughtful, modular approach to health data analysis and coaching using agent orchestration. By pairing a local, self-hosted architecture with an AI meta-agent layer, it balances privacy, flexibility, and intelligence.
-This project demonstrates a practical multi-agent system for health tracking using the ROMA pattern
+An intelligent health tracking system combining the ROMA agent framework with OpenDeepSearch for evidence-based medical insights. Features automated research, health coaching, and comprehensive weekly reports backed by authoritative medical sources.
 
-**Atomizer → Planner → Executors (Ingest / Metrics / Coach / Report) → Aggregator**
-With specialized health agents:
+**3 Microservices**: Health API, ROMA orchestration, Search service
+- **ROMA Pattern**: Atomizer → Planner → Executors → Aggregator
+- **Specialized Agents**: Research, Metrics, Coaching, Reporting
 
 DataIngestionAgent - validates/normalizes inputs
 MetricsAnalysisAgent - computes health scores
 CoachingAgent - generates personalized recommendations
 ReportingAgent - creates comprehensive weekly summaries
+
+ Health Analysis
+- **Weekly Reports**: Comprehensive analysis with metrics assessment and personalized recommendations
+- **Health Chat**: Natural language Q&A with evidence-based responses
+- **Direct Research**: Query medical databases on-demand
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104%2B-009688)](#)
 [![Python](https://img.shields.io/badge/Python-3.11-blue)](#)
@@ -21,22 +26,29 @@ ReportingAgent - creates comprehensive weekly summaries
 
 ## ✨ Features
 
-Features
+**Features**
 
 AI-Powered Analysis: Get intelligent health insights from your weekly metrics
+
 Personal Health Coaching: Chat interface for health advice and motivation
+
 Weekly Reports: Comprehensive analysis with actionable recommendations
+
 Data Persistence: Save and retrieve historical health reports
+
 Fault Tolerance: Works with local algorithms when LLM is unavailable
+
 Secure API: API key protection for sensitive operations
 
 
-
-Prerequisites
+**Prerequisites**
 
 Docker and Docker Compose
 OpenRouter API key (free tier available at https://openrouter.ai/keys)
 
+Serper - For Google search (free tier: 2,500 queries) (https://serper.dev/signup)
+
+Jina - For web scraping (free tier: 20,000 requests) (https://jina.ai/)
 
 
 ---
@@ -166,39 +178,61 @@ ROMA_BASE_URL=http://roma:5000
 DATABASE_URL=sqlite:///./health_reports.db
 
 
+
+4. Access Application
 ```
-Open docs in your browser:
-http://127.0.0.1:8000/docs
+Open in browser: http://localhost:8000
+```
 
-# Core functionality
-POST /weekly-report    # Comprehensive ROMA analysis
 
-POST /analyze         # Quick health insights 
+🔧 API Endpoints
+Core Endpoints
 
-POST /chat           # AI health coaching
+GET / - Web interface
+GET /health - Service health check
+POST /weekly-report - Generate comprehensive health report
+POST /chat - Health assistant conversation
+POST /research - Direct medical research
 
-GET /reports         # Browse saved reports
+Search Service
 
-# System status
-GET /health          # Service health check
+POST /search - Search health information
+GET /cache/stats - Cache statistics
+POST /cache/clear - Clear cache
 
-GET /roma-info       # ROMA architecture info
+ROMA Service
+
+POST /analyze - ROMA orchestration
+POST /execute - Direct executor call
+GET /agents - List available agents
+
 
 
 
 🧠 How It Works (ROMA)
 
 ```
-flowchart LR
-    A[User Request] --> B{Atomizer}
-    B -- atomic --> E[Executor]
-    B -- complex --> C[Planner]
-    C --> E1[Ingest Agent]
-    E1 --> E2[Metrics Agent]
-    E2 --> E3[Coaching Agent]
-    E3 --> E4[Reporting Agent]
-    E & E1 & E2 & E3 & E4 --> F[Aggregator]
-    F --> G[Response + (optional) Save to SQLite]
+┌─────────────────────────────────────────────────┐
+│           Health Tracker Frontend               │
+│        (http://localhost:8000)                  │
+└────────────┬────────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────────┐
+│         Health API Service (Port 8000)          │
+│  • Weekly Reports    • Chat    • Research       │
+└────────┬────────────────────────────┬───────────┘
+         │                            │
+         ▼                            ▼
+┌──────────────────┐         ┌──────────────────┐
+│  ROMA Service    │         │  Search Service  │
+│  (Port 5000)     │         │  (Port 5001)     │
+│                  │         │                  │
+│  • Atomizer      │         │  • Serper API    │
+│  • Planner       │         │  • Jina Reader   │
+│  • Executors     │         │  • 24h Cache     │
+│  • Aggregator    │         │  • OpenDeepSearch│
+└──────────────────┘         └──────────────────┘
 ```
 Atomizer: decides if the task is atomic or needs decomposition.
 
@@ -223,37 +257,98 @@ More agents (nutrition, recovery, stress).
 Project Structure
 
 
-sentient-health-tracker/
-├── main.py                 # FastAPI health tracker service
-├── roma_service.py         # ROMA meta-agent service  
+
+sentient-health-fresh/
+├── main.py                 # Health API service
+├── search_service.py       # OpenDeepSearch integration
+├── cache_manager.py        # Result caching
+├── roma_service.py         # ROMA orchestration
 ├── roma_engine/            # ROMA framework
-├── roma_agents/            # Specialized health agents
-├── Dockerfile.health       # Health tracker container
+├── roma_agents/
+│   ├── research_agent.py   # Medical research
+│   ├── metrics_agent.py    # Health calculations
+│   ├── coaching_agent.py   # Recommendations
+│   └── reporting_agent.py  # Report generation
+├── static/
+│   ├── index.html          # Frontend UI
+│   └── chiefmmorgs.png     # Branding
+├── Dockerfile.health       # Health service container
 ├── Dockerfile.roma         # ROMA service container
-├── compose.yml             # Docker composition
-├── requirements.txt        # Python dependencies
-└── .env                    # Environment configuration
+├── Dockerfile.search       # Search service container
+├── docker-compose.yml      # Service orchestration
+└── requirements-*.txt      # Dependencies
+
+```
+# Run integration tests
+```
+./test_integration.sh
+```
+
+# Test specific endpoint
+```
+curl http://localhost:8000/health
+```
+
+# Check service logs
+```
+docker compose logs -f health
+docker compose logs -f roma
+docker compose logs -f search
+```
+
+# Check status
+```
+docker compose ps
+```
+
+# View logs
+```
+docker compose logs health
+```
+
+# Rebuild
+```
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+```
 
 
+# Clear cache
+```
+curl -X POST http://localhost:5001/cache/clear
+```
 
+# Check cache stats
+```
+curl http://localhost:5001/cache/stats
+
+
+```
 Local Development
 
 # Install dependencies
 ```
-pip install -r requirements.txt
-```
+pip install -r requirements-base.txt
 
-# Run health tracker locally
 ```
-uvicorn main:app --host 0.0.0.0 --port 8000
+# Run health service
 ```
+uvicorn main:app --reload --port 8000
 
-# Run ROMA service locally
+```
+# Run ROMA service (separate terminal)
 ```
 python roma_service.py
 
+```
+# Run search service (separate terminal)
+```
+uvicorn search_service:app --reload --port 5001
 
 ```
+
+
 
 Troubleshooting
 Common Issues
@@ -272,23 +367,16 @@ docker compose logs roma
 ```
 docker compose build roma
 ```
-LLM not working ("llm_working": false)
-# Verify API key
+# Clear cache
 ```
-curl -H "Authorization: Bearer $OPENROUTER_API_KEY" https://openrouter.ai/api/v1/models
-```
-# Test different model
+curl -X POST http://localhost:5001/cache/clear
 
 ```
-echo "DEFAULT_MODEL=google/gemma-2-9b-it:free" >> .env
-docker compose restart roma
-```
-Database errors
+# Check cache stats
 
-
-# Check database file permissions
 ```
-ls -la health_reports.db
+curl http://localhost:5001/cache/statsl
+
 ```
 
 # Reset database
