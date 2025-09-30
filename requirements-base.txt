@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+httpx
+pydantic
+python-dotenv
+sqlalchemy>=2.0
+requests
+flask

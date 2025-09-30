@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentient Health Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .tab.active {
+            background: white;
+            color: #667eea;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            font-weight: 500;
+        }
+        
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .result {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 500px;
+        }
+        
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .message {
+            margin-bottom: 16px;
+            padding: 12px;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+        
+        .message.user {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+        }
+        
+        .message.assistant {
+            background: white;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .chat-input-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .chat-input {
+            flex: 1;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        
+        .badge.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .badge.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Sentient Health Tracker</h1>
+            <p class="subtitle">AI-Powered Health Analysis with Evidence-Based Research</p>
+        </header>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('weekly')">Weekly Report</button>
+            <button class="tab" onclick="switchTab('chat')">Health Chat</button>
+            <button class="tab" onclick="switchTab('research')">Research</button>
+        </div>
+        
+        <!-- Weekly Report Tab -->
+        <div id="weekly-tab" class="tab-content">
+            <div class="card">
+                <h2>Weekly Health Data</h2>
+                <form id="weekly-form" onsubmit="submitWeeklyReport(event)">
+                    <div class="metrics-grid">
+                        <div class="form-group">
+                            <label>Steps (total/week)</label>
+                            <input type="number" name="steps" placeholder="70000" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Sleep (hours/week)</label>
+                            <input type="number" step="0.1" name="sleep_hours" placeholder="49" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Workouts (sessions)</label>
+                            <input type="number" name="workouts" placeholder="4" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Water (liters/week)</label>
+                            <input type="number" step="0.1" name="water_liters" placeholder="16" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Resting Heart Rate (bpm)</label>
+                            <input type="number" name="resting_hr" placeholder="65">
+                        </div>
+                        <div class="form-group">
+                            <label>HRV</label>
+                            <input type="number" name="hrv" placeholder="55">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn" id="weekly-btn">Generate Report</button>
+                </form>
+                <div id="weekly-result" class="result hidden"></div>
+            </div>
+        </div>
+        
+        <!-- Chat Tab -->
+        <div id="chat-tab" class="tab-content hidden">
+            <div class="card">
+                <h2>Health Assistant</h2>
+                <div class="chat-container">
+                    <div class="messages" id="messages"></div>
+                    <div class="chat-input-group">
+                        <textarea id="chat-input" placeholder="Ask me about health, fitness, sleep, nutrition..."></textarea>
+                        <button onclick="sendMessage()" class="btn" id="chat-btn">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Research Tab -->
+        <div id="research-tab" class="tab-content hidden">
+            <div class="card">
+                <h2>Medical Research</h2>
+                <form onsubmit="submitResearch(event)">
+                    <div class="form-group">
+                        <label>Research Query</label>
+                        <input type="text" id="research-query" placeholder="What are the benefits of morning exercise?" required>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="deep-mode">
+                            Deep Search (slower, more comprehensive)
+                        </label>
+                    </div>
+                    <button type="submit" class="btn" id="research-btn">Search</button>
+                </form>
+                <div id="research-result" class="result hidden"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        
+        function switchTab(tab) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            
+            // Show selected tab
+            document.getElementById(`${tab}-tab`).classList.remove('hidden');
+            event.target.classList.add('active');
+        }
+        
+async function submitWeeklyReport(event) {
+            event.preventDefault();
+            const btn = document.getElementById('weekly-btn');
+            const resultDiv = document.getElementById('weekly-result');
+            
+            btn.disabled = true;
+            btn.textContent = 'Generating Report...';
+            resultDiv.innerHTML = '<div class="loading">Analyzing your health data and fetching medical insights...</div>';
+            resultDiv.classList.remove('hidden');
+            
+            const formData = new FormData(event.target);
+            const data = {};
+            formData.forEach((value, key) => {
+                data[key] = value ? parseFloat(value) : null;
+            });
+            
+            try {
+                const response = await fetch(`${API_BASE}/weekly-report`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({data})
+                });
+                
+                const result = await response.json();
+                
+                let html = `<h3>Health Report</h3>\n\n${result.report}\n\n`;
+                
+                if (result.metrics) {
+                    html += `<h4>Metrics Summary</h4>\n`;
+                    html += `Daily Steps: ${result.metrics.daily_steps_avg || 'N/A'}\n`;
+                    html += `Daily Sleep: ${result.metrics.daily_sleep_avg || 'N/A'}h\n`;
+                    html += `Workouts: ${result.metrics.workouts || 'N/A'}\n`;
+                }
+                
+                if (result.research_used) {
+                    html += `\n<span class="badge success">Research Used</span>`;
+                    if (result.research_topics) {
+                        html += `\nTopics: ${result.research_topics.join(', ')}`;
+                    }
+                }
+                
+                resultDiv.textContent = html;
+            } catch (error) {
+                resultDiv.textContent = `Error: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate Report';
+            }
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const btn = document.getElementById('chat-btn');
+            const messagesDiv = document.getElementById('messages');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Add user message
+            const userMsg = document.createElement('div');
+            userMsg.className = 'message user';
+            userMsg.textContent = message;
+            messagesDiv.appendChild(userMsg);
+            
+            input.value = '';
+            btn.disabled = true;
+            
+            // Add loading message
+            const loadingMsg = document.createElement('div');
+            loadingMsg.className = 'message assistant';
+            loadingMsg.textContent = 'Thinking...';
+            messagesDiv.appendChild(loadingMsg);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            try {
+                const response = await fetch(`${API_BASE}/chat`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message})
+                });
+                
+                const result = await response.json();
+                
+                loadingMsg.textContent = result.reply;
+                if (result.research_used) {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge info';
+                    badge.textContent = 'Evidence-Based';
+                    loadingMsg.appendChild(document.createElement('br'));
+                    loadingMsg.appendChild(badge);
+                }
+            } catch (error) {
+                loadingMsg.textContent = `Error: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+        }
+        
+        async function submitResearch(event) {
+            event.preventDefault();
+            const btn = document.getElementById('research-btn');
+            const resultDiv = document.getElementById('research-result');
+            const query = document.getElementById('research-query').value;
+            const deepMode = document.getElementById('deep-mode').checked;
+            
+            btn.disabled = true;
+            btn.textContent = 'Searching...';
+            resultDiv.innerHTML = '<div class="loading">Searching medical literature...</div>';
+            resultDiv.classList.remove('hidden');
+            
+            try {
+                const response = await fetch(`${API_BASE}/research`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query, deep_mode: deepMode})
+                });
+                
+                const result = await response.json();
+                
+                let html = `<h3>Research Results</h3>\n\n${result.research}\n\n`;
+                html += `<span class="badge info">Mode: ${result.mode}</span>\n\n`;
+                html += result.disclaimer;
+                
+                resultDiv.textContent = html;
+            } catch (error) {
+                resultDiv.textContent = `Error: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Search';
+            }
+        }
+        
+        // Allow Enter to send chat messages
+        document.getElementById('chat-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+<!-- Footer -->
+    <footer style="text-align: center; padding: 20px; margin-top: 40px;">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 10px; color: white; opacity: 0.8;">
+            <span>Made by</span>
+            <img src="chiefmmorgs.png" alt="chiefmmorgs" style="height: 30px; filter: invert(1);">
+        </div>
+    </footer>
+    
+</div>
+</body>
+</html>

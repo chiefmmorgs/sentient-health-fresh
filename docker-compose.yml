@@ -1,40 +1,62 @@
 services:
+  # Existing health service
+  health:
+    build:
+      context: .
+      dockerfile: Dockerfile.health
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - HEALTH_API_KEY=${HEALTH_API_KEY}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-meta-llama/llama-3.2-3b-instruct:free}
+      - ROMA_BASE_URL=http://roma:5000
+      - SEARCH_SERVICE_URL=http://search:5001  # NEW
+      - DATABASE_URL=sqlite:///./health_reports.db
+    volumes:
+      - ./health_reports.db:/app/health_reports.db
+    depends_on:
+      - roma
+      - search  # NEW
+    networks:
+      - health-network
+
+  # Existing ROMA service
   roma:
     build:
       context: .
       dockerfile: Dockerfile.roma
-    container_name: sentient-health-tracker--roma-1
     ports:
-      - "5001:5000"                 # host:container  <<<<< change to 5001:5000
-    env_file:
-      - .env
+      - "5000:5000"
     environment:
-      - HOST=0.0.0.0
-      - PORT=5000                   # <<<<< match what the app actually uses
-      - FLASK_ENV=production
-    command: python -m roma_service --host ${HOST:-0.0.0.0} --port ${PORT:-5000}
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:5000/api/simple/status || exit 1"]  # <<<<< 5000
-      interval: 15s
-      timeout: 5s
-      retries: 8
-    restart: unless-stopped
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-meta-llama/llama-3.2-3b-instruct:free}
+      - SEARCH_SERVICE_URL=http://search:5001  # NEW
+    depends_on:
+      - search  # NEW
+    networks:
+      - health-network
 
-  health-tracker:
+  # NEW - Search service
+  search:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: sentient-health-tracker--health-tracker-1
+      dockerfile: Dockerfile.search
     ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
+      - "5001:5001"
+    environment:
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - JINA_API_KEY=${JINA_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    networks:
+      - health-network
     healthcheck:
-      test: ["CMD", "curl", "-fsS",
-             "-H", "x-api-key: ${HEALTH_API_KEY}",
-             "http://localhost:8000/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 8
-    restart: unless-stopped
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  health-network:
+    driver: bridge

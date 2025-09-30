@@ -21,7 +21,6 @@ class ROMARunner:
     
     def __init__(self, max_depth: int = 3):
         print("🤖 Initializing REAL Sentient ROMA Engine...")
-        
         # ROMA Core Components
         self.atomizer = HealthAtomizer()
         self.planner = HealthPlanner()
@@ -30,20 +29,31 @@ class ROMARunner:
         # SAFETY: Maximum recursion depth
         self.max_depth = max_depth
         
+        # Import ResearchAgent
+        try:
+            from roma_agents.research_agent import ResearchAgent
+            research_agent = ResearchAgent()
+        except ImportError:
+            print("⚠️  ResearchAgent not found, skipping...")
+            research_agent = None
+        
         # Specialized Health Executors
         self.executors = {
             "ingest": DataIngestionAgent(),
             "metrics": MetricsAnalysisAgent(),
+            "research": research_agent,  # NEW
             "coach": CoachingAgent(),
             "report": ReportingAgent(),
             # Map alternative names
             "DataIngestionAgent": DataIngestionAgent(),
             "MetricsAnalysisAgent": MetricsAnalysisAgent(),
+            "ResearchAgent": research_agent,  # NEW
             "CoachingAgent": CoachingAgent(),
             "ReportingAgent": ReportingAgent()
         }
-        
         print("✅ REAL ROMA agents initialized successfully")
+        if research_agent:
+            print("🔍 ResearchAgent integrated")
         print(f"🛡️  Safety: Maximum recursion depth = {max_depth}")
     
     def _solve(self, task: Dict[str, Any], depth: int = 0) -> Dict[str, Any]:

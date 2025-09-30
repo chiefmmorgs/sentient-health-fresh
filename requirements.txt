@@ -1,6 +1,14 @@
+# Existing dependencies
 fastapi
-uvicorn[standard]
+uvicorn
 httpx
 pydantic
-
+python-dotenv
 sqlalchemy>=2.0
+requests
+
+# OpenDeepSearch dependencies (install from GitHub)
+git+https://github.com/sentient-agi/OpenDeepSearch.git
+crawl4ai
+litellm
+smolagents

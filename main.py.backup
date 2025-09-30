@@ -1,4 +1,3 @@
-from fastapi.responses import FileResponse
 from fastapi import FastAPI, HTTPException, Header, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +12,8 @@ app = FastAPI(title="Health Tracker")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # Serve a lightweight UI if you have static/index.html
+if os.path.isdir("static"):
+    app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 ROMA_BASE = os.getenv("ROMA_URL", "http://roma:5000") + "/api/simple"
 SEARCH_SERVICE_URL = os.getenv("SEARCH_SERVICE_URL", "http://search:5001")  # NEW
@@ -277,180 +278,49 @@ async def health():
 @app.post("/weekly-report")
 async def weekly_report(request: HealthData, save: bool = Query(False), db: Session = Depends(get_db)):
     d = request.data
-    
-    # Calculate metrics first
+    goal = ("Summarize the week, compute daily averages, give a short health assessment, "
+            "and 2–3 specific, actionable recommendations. Keep it concise. Do NOT repeat my prompt.")
+    a1 = await _roma_analysis(d, "weekly health metrics", goal=goal)
+    if a1:
+        text = a1
+    else:
+        goal_exec = f"""
+You are a helpful health coach. Do NOT echo my instructions.
+Using the following weekly data, write a brief report with:
+- Daily averages
+- Health assessment
+- 2–3 concrete recommendations
+
+Data:
+- Steps: {d.get('steps', 0)} total
+- Sleep: {d.get('sleep_hours', 0)} hours total
+- Workouts: {d.get('workouts', 0)} sessions
+- Water: {d.get('water_liters', 0)} liters
+"""
+        a2 = await _roma_execute(goal_exec)
+        text = a2 if a2 else _fallback_weekly(d)
+
     metrics = {
         "daily_steps_avg": round(d.get("steps", 0)/7, 0) if d.get("steps") else 0,
         "daily_sleep_avg": round(d.get("sleep_hours", 0)/7, 1) if d.get("sleep_hours") else 0.0,
         "workouts": int(d.get("workouts", 0) or 0),
         "water_liters": float(d.get("water_liters", 0) or 0.0),
-        "resting_hr": d.get("resting_hr"),
-        "hrv": d.get("hrv")
     }
-    
-    # Identify areas needing research
-    research_queries = []
-    
-    if metrics["daily_sleep_avg"] < 7:
-        research_queries.append("optimal sleep duration for adults")
-    
-    if metrics["daily_steps_avg"] < 8000:
-        research_queries.append("health benefits of walking daily")
-    
-    if metrics["resting_hr"] and metrics["resting_hr"] > 75:
-        research_queries.append("ways to lower resting heart rate")
-    
-    if metrics["hrv"] and metrics["hrv"] < 50:
-        research_queries.append("how to improve heart rate variability")
-    
-    if metrics["water_liters"] < 14:
-        research_queries.append("daily water intake recommendations")
-    
-    # Fetch research for identified areas
-    research_insights = []
-    if research_queries and await _check_search_service():
-        for query in research_queries[:2]:  # Limit to 2 queries
-            log.info(f"Researching for weekly report: {query}")
-            search_result = await _search_health_info(query, deep_mode=False)
-            if search_result and search_result.get("result"):
-                research_insights.append({
-                    "topic": query,
-                    "insight": search_result["result"]
-                })
-    
-    # Build report directly without ROMA confusion
-    text = f"""## Weekly Health Summary
 
-**Metrics Overview:**
-- Daily Steps: {metrics['daily_steps_avg']:.0f} steps (Target: 10,000)
-- Daily Sleep: {metrics['daily_sleep_avg']:.1f} hours (Target: 7-9h)
-- Workouts: {metrics['workouts']} sessions this week
-- Water Intake: {metrics['water_liters']:.1f}L total"""
-    
-    if metrics['resting_hr']:
-        text += f"\n- Resting Heart Rate: {metrics['resting_hr']} bpm"
-    if metrics['hrv']:
-        text += f"\n- HRV: {metrics['hrv']}"
-    
-    text += "\n\n**Assessment:**\n"
-    
-    # Add assessments
-    assessments = []
-    if metrics['daily_steps_avg'] >= 10000:
-        assessments.append("✓ Excellent step count - you're meeting daily activity goals")
-    elif metrics['daily_steps_avg'] >= 7000:
-        assessments.append("○ Good activity level - aim to reach 10,000 steps daily")
-    else:
-        assessments.append("⚠ Low activity - increase daily movement")
-    
-    if metrics['daily_sleep_avg'] >= 7:
-        assessments.append("✓ Sleep duration is healthy")
-    else:
-        assessments.append("⚠ Insufficient sleep - aim for 7-9 hours nightly")
-    
-    if metrics['workouts'] >= 4:
-        assessments.append("✓ Strong workout routine")
-    elif metrics['workouts'] >= 2:
-        assessments.append("○ Moderate workout frequency - consider adding more sessions")
-    else:
-        assessments.append("⚠ Low workout frequency - aim for 3-5 sessions weekly")
-    
-    text += "\n".join(assessments)
-    
-    # Add research insights
-    if research_insights:
-        text += "\n\n**Evidence-Based Insights:**\n"
-        for insight in research_insights:
-            summary = insight['insight'][:250] + "..." if len(insight['insight']) > 250 else insight['insight']
-            text += f"\n{summary}\n"
-    
-    # Add recommendations
-    text += "\n**Recommendations:**\n"
-    recs = []
-    
-    if metrics['daily_steps_avg'] < 8000:
-        recs.append("1. Increase daily steps: Take a 15-20 minute walk after meals or during breaks")
-    
-    if metrics['daily_sleep_avg'] < 7:
-        recs.append(f"{'2' if len(recs) else '1'}. Improve sleep: Establish a consistent bedtime routine and aim for 7-9 hours")
-    
-    if metrics['workouts'] < 3:
-        recs.append(f"{len(recs)+1}. Add more workouts: Schedule 3-5 exercise sessions weekly for optimal health")
-    
-    if metrics['resting_hr'] and metrics['resting_hr'] > 75:
-        recs.append(f"{len(recs)+1}. Lower resting heart rate: Focus on cardiovascular exercise and stress management")
-    
-    if metrics['hrv'] and metrics['hrv'] < 50:
-        recs.append(f"{len(recs)+1}. Improve HRV: Prioritize quality sleep, manage stress, and avoid overtraining")
-    
-    if metrics['water_liters'] < 14:
-        recs.append(f"{len(recs)+1}. Increase hydration: Aim for 2-2.5 liters of water daily")
-    
-    # Ensure we have 3 recommendations
-    while len(recs) < 3:
-        generic = [
-            f"{len(recs)+1}. Maintain consistency: Keep regular sleep and exercise schedules",
-            f"{len(recs)+1}. Add variety: Mix cardio, strength training, and flexibility work",
-            f"{len(recs)+1}. Monitor progress: Track your metrics weekly to see improvements"
-        ]
-        recs.append(generic[len(recs) % len(generic)])
-    
-    text += "\n".join(recs[:3])
-    
-    # Save report
     report_id = None
     if save:
-        metrics_with_research = metrics.copy()
-        if research_insights:
-            metrics_with_research["research_insights"] = research_insights
-        
         rec = ReportDB(
             kind="weekly",
             input_json=json.dumps(d),
             output_text=text,
-            metrics_json=json.dumps(metrics_with_research)
+            metrics_json=json.dumps(metrics)
         )
         db.add(rec)
         db.commit()
         db.refresh(rec)
         report_id = rec.id
 
-    return {
-        "status": "success", 
-        "report": text, 
-        "metrics": metrics, 
-        "data_analyzed": d, 
-        "report_id": report_id,
-        "research_used": len(research_insights) > 0,
-        "research_topics": [item["topic"] for item in research_insights]
-    }
-    report_id = None
-    if save:
-        # Include research insights in saved report
-        metrics_with_research = metrics.copy()
-        if research_insights:
-            metrics_with_research["research_insights"] = research_insights
-        
-        rec = ReportDB(
-            kind="weekly",
-            input_json=json.dumps(d),
-            output_text=text,
-            metrics_json=json.dumps(metrics_with_research)
-        )
-        db.add(rec)
-        db.commit()
-        db.refresh(rec)
-        report_id = rec.id
-
-    return {
-        "status": "success", 
-        "report": text, 
-        "metrics": metrics, 
-        "data_analyzed": d, 
-        "report_id": report_id,
-        "research_used": len(research_insights) > 0,
-        "research_topics": [item["topic"] for item in research_insights]
-    }
+    return {"status": "success", "report": text, "metrics": metrics, "data_analyzed": d, "report_id": report_id}
 
 @app.post("/analyze")
 async def analyze(request: HealthData, save: bool = Query(False), db: Session = Depends(get_db)):
@@ -638,11 +508,6 @@ def delete_report(report_id: int, db: Session = Depends(get_db)):
     db.delete(rec); db.commit()
     return {"status": "deleted", "id": report_id}
 
-# Serve frontend
-@app.get("/")
-async def read_root():
-    from fastapi.responses import FileResponse
-    return FileResponse("static/index.html")
 # ----------------- Entrypoint -----------------
 if __name__ == "__main__":
     import uvicorn

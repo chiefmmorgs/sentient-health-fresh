@@ -1,0 +1,26 @@
+fastapi
+uvicorn
+pydantic
+python-dotenv
+
+# OpenDeepSearch core dependencies (from their requirements.txt)
+openai>=1.65.1
+datasets>=3.3.2
+transformers>=4.49.0
+litellm>=1.61.20
+langchain>=0.3.19
+git+https://github.com/salzubi401/crawl4ai.git@main
+fasttext-wheel>=0.9.2
+wikipedia-api>=0.8.1
+pillow>=10.4.0
+smolagents>=1.9.2
+gradio==5.20.1
+
+# Additional runtime dependencies
+torch
+loguru
+httpx
+nest_asyncio
+
+# OpenDeepSearch itself
+git+https://github.com/sentient-agi/OpenDeepSearch.git

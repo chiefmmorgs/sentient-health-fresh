@@ -104,20 +104,25 @@ Respond with JSON: {"is_atomic": boolean, "reasoning": "explanation"}"""
 
 class HealthPlanner:
     """ROMA Planner with LLM fallback support"""
-    
     def plan(self, task: Dict[str, Any]) -> List[Dict[str, Any]]:
         task_description = task.get("description", str(task))
         task_data = task.get("data", {})
-        
-        system_prompt = """You are the Planner in a ROMA health analysis system.
-
+        system_prompt = """You are the Planner in a ROMA health analysis system.        
 Break complex health tasks into executable subtasks with proper dependencies.
 
 Available Agents:
 - DataIngestionAgent: Validates, normalizes health data
 - MetricsAnalysisAgent: Computes health metrics, adherence
-- CoachingAgent: Provides personalized recommendations  
+- ResearchAgent: Searches medical literature for evidence-based information
+- CoachingAgent: Provides personalized recommendations
 - ReportingAgent: Creates comprehensive reports
+
+Typical execution order:
+1. DataIngestionAgent (validate data)
+2. MetricsAnalysisAgent (compute metrics)
+3. ResearchAgent (fetch medical guidance for identified concerns) - OPTIONAL
+4. CoachingAgent (provide recommendations)
+5. ReportingAgent (create final report)
 
 Respond with JSON: {"subtasks": [{"id": "unique_id", "kind": "agent_type", "description": "task_description", "depends_on": ["task_ids"], "priority": 1-5}], "reasoning": "explanation"}"""
 
