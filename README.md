@@ -170,11 +170,14 @@ curl -H "X-API-Key: YOUR_API_KEY" http://127.0.0.1:8000/reports/REPORT_ID
 Environment Variables
 bash# Required
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
+
 HEALTH_API_KEY=your-secure-random-key
 
 # Optional
 DEFAULT_MODEL=meta-llama/llama-3.2-3b-instruct:free
+
 ROMA_BASE_URL=http://roma:5000
+
 DATABASE_URL=sqlite:///./health_reports.db
 
 
@@ -189,21 +192,29 @@ Open in browser: http://localhost:8000
 Core Endpoints
 
 GET / - Web interface
+
 GET /health - Service health check
+
 POST /weekly-report - Generate comprehensive health report
+
 POST /chat - Health assistant conversation
+
 POST /research - Direct medical research
 
 Search Service
 
 POST /search - Search health information
+
 GET /cache/stats - Cache statistics
+
 POST /cache/clear - Clear cache
 
 ROMA Service
 
 POST /analyze - ROMA orchestration
+
 POST /execute - Direct executor call
+
 GET /agents - List available agents
 
 
